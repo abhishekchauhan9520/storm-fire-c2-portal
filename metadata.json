@@ -1,0 +1,6 @@
+{
+  "name": "Storm Fire C2 Portal",
+  "description": "Next-generation unified Command & Control system inspired by Ukraine Delta and Svod frameworks. Features 20-layer core services and 10 vital modules such as COP Monitor, Strix UAV (Asta-S), Element Comms (Strix Messenger), Tube Fusion, and Target Hub.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
