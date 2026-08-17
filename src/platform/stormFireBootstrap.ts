@@ -29,7 +29,7 @@ const DEVELOPMENT_SERVICES: Service[] = [
 const DEVELOPMENT_POLICIES: Policy[] = [
   { id: "dev-company-track", version: 1, effect: "ALLOW", participantIds: ["operator-command"], organizationIds: ["company-a"], roleIds: ["COMMAND"], serviceIds: ["logistics", "uav"], informationTypes: ["Track", "Observation", "Telemetry", "LogisticsRequest", "LogisticsAlert", "ResourceStatus"], geographicScopeIds: ["local-aor"], classifications: ["CONTROLLED", "MISSION"], priority: 100, enabled: true },
   { id: "dev-company-context", version: 1, effect: "ALLOW", participantIds: ["operator-command"], organizationIds: ["company-a"], roleIds: ["COMMAND"], serviceIds: ["logistics", "uav"], informationTypes: ["Context", "Alert"], geographicScopeIds: ["local-aor"], classifications: ["PUBLIC", "CONTROLLED", "MISSION"], priority: 100, enabled: true },
-  { id: "dev-intel-information", version: 1, effect: "ALLOW", participantIds: ["operator-intel"], organizationIds: ["brigade-a"], roleIds: ["INTELLIGENCE"], serviceIds: ["intelligence", "ew"], informationTypes: ["Observation", "Track", "Assessment", "Finding", "EWObservation", "Alert"], geographicScopeIds: ["local-aor"], classifications: ["CONTROLLED", "MISSION"], priority: 100, enabled: true },
+  { id: "dev-intel-information", version: 1, effect: "ALLOW", participantIds: ["operator-intel"], organizationIds: ["brigade-a", "intel-cell"], roleIds: ["INTELLIGENCE"], serviceIds: ["intelligence", "ew"], informationTypes: ["Observation", "Track", "Assessment", "Finding", "EWObservation", "Alert"], geographicScopeIds: ["local-aor"], classifications: ["CONTROLLED", "MISSION"], priority: 100, enabled: true },
 ];
 
 export const stormFireDevelopmentInformationRelationships = new InformationRelationshipEngine();
@@ -46,7 +46,7 @@ export function bootstrapStormFireDevelopmentScenario(): void {
   }
 
   if (!stormFireGeographicScopes.get("local-aor")) {
-    stormFireGeographicScopes.register({ id: "local-aor", label: "Development Local AOR", center: { latitude: 34.15, longitude: 77.58 }, radiusKm: 80, enabled: true });
+    stormFireGeographicScopes.register({ id: "local-aor", center: { latitude: 34.15, longitude: 77.58 }, radiusKm: 80, enabled: true });
   }
 
   stormFireParticipants.update("operator-command", { organizationIds: ["company-a"], roleIds: ["COMMAND"], serviceIds: ["logistics", "uav"], geographicScopeIds: ["local-aor"], informationRelationshipIds: ["info-command-intel", "info-command-uav"], workspaceIds: ["company-cop"], canProduce: true, canConsume: true });
@@ -92,7 +92,7 @@ export function bootstrapStormFireDevelopmentScenario(): void {
         geographicScopeIds: ["local-aor"],
         provenance: { sourceId: item.producer, producerId: item.producer, observedAt: now, receivedAt: now, confidence: item.payload.confidence ?? 0.8, quality: "MEDIUM" },
         payload: item.payload,
-        tags: [`org:${item.organizationId}`, "geo:local-aor", "rel:info-command-uav"],
+        tags: [`org:${item.organizationId}`, "geo:local-aor", item.producer === "operator-intel" ? "rel:info-command-intel" : "rel:info-command-uav"],
       });
     }
   }
