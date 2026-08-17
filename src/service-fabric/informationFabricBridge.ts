@@ -1,5 +1,5 @@
 import type { CommandSystem, TacticalNode, TacticalTrack } from "../types";
-import { commandSystemToCanonical, nodeToCanonical, serviceEventToCanonical, trackToCanonical, type CanonicalInformationRecord } from "./informationAdapter";
+import { commandSystemToCanonical, nodeToCanonical, serviceEventToCanonical, trackToCanonical, type CanonicalInformationKind, type CanonicalInformationRecord } from "./informationAdapter";
 import { stormFireEventBus, type StormFireEvent } from "./serviceEventBus";
 import { stormFireRelationshipFabric } from "./relationshipFabric";
 import { stormFireParticipants } from "./participantModel";
@@ -13,7 +13,7 @@ export interface InformationQuery { kind?: CanonicalInformationRecord["kind"]; s
 export interface InformationDeliveryRecord { id: string; informationId: string; version: number; participantId: string; deliveredAt: string; acknowledgedAt?: string; status: DeliveryStatus; }
 interface InformationSubscription { participantId: string; informationTypes: Set<string>; listener: InformationDeliveryListener; }
 
-/** Transitional UI/service-fabric compatibility adapter. Canonical platform code uses domain Information Fabric. */
+/** Transitional compatibility adapter. Canonical platform code uses domain Information Fabric. */
 class InformationFabricBridge {
   private records = new Map<string, CanonicalInformationRecord>();
   private listeners = new Set<InformationListener>();
@@ -41,6 +41,20 @@ class InformationFabricBridge {
   private createDelivery(record: CanonicalInformationRecord, participantId: string): InformationDeliveryRecord { const delivery: InformationDeliveryRecord = { id: `delivery-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, informationId: record.id, version: record.version, participantId, deliveredAt: new Date().toISOString(), status: "DELIVERED" }; this.deliveries.set(delivery.id, delivery); stormFireInformationPersistence.appendDelivery(delivery); return delivery; }
   private deliverToSubscribers(record: CanonicalInformationRecord): void { if (this.isStale(record)) return; for (const [participantId, subscriptions] of this.subscriptions) { if (!this.isAuthorizedConsumer(record, participantId)) continue; for (const subscription of subscriptions) { if (!subscription.informationTypes.has(record.kind)) continue; this.createDelivery(record, participantId); subscription.listener(record); } } }
   ingest(record: CanonicalInformationRecord): CanonicalInformationRecord { const previous = this.records.get(record.id); const next = previous ? { ...record, version: Math.max(record.version, previous.version + 1), provenance: { ...record.provenance, lineage: Array.from(new Set([...previous.provenance.lineage, ...record.provenance.lineage])) } } : record; this.records.set(record.id, next); stormFireInformationPersistence.append(next); this.deliverToSubscribers(next); this.listeners.forEach((listener) => listener(this.snapshot())); return next; }
+  ingestServiceRecord(serviceId: string, kind: string, payload: Record<string, unknown>, relationships: string[]): CanonicalInformationRecord {
+    const observedAt = new Date().toISOString();
+    const canonicalKind: CanonicalInformationKind = ["TRACK", "NODE", "COMMAND_SYSTEM", "SERVICE_EVENT", "OBSERVATION", "ASSESSMENT", "REQUIREMENT", "RESOURCE", "ALERT"].includes(kind) ? kind as CanonicalInformationKind : "OBSERVATION";
+    return this.ingest({
+      id: `${serviceId}:${canonicalKind}:${Date.now()}`,
+      kind: canonicalKind,
+      source: serviceId,
+      observedAt,
+      payload,
+      relationships: relationships.map((targetId) => ({ targetId, relation: "RELATED" })),
+      version: 1,
+      provenance: { sourceId: serviceId, observedAt, ingestedAt: observedAt, confidence: "UNKNOWN", classification: "UNCLASSIFIED", lineage: [serviceId] },
+    });
+  }
   ingestTrack(track: TacticalTrack) { return this.ingest(trackToCanonical(track)); }
   ingestNode(node: TacticalNode) { return this.ingest(nodeToCanonical(node)); }
   ingestCommandSystem(system: CommandSystem) { return this.ingest(commandSystemToCanonical(system)); }
