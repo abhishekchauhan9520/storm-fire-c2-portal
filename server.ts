@@ -6,9 +6,11 @@ import { createStormFireRuntime } from "./src/core/stormFireRuntime";
 import { stormFireAuthorization } from "./src/domain/authorizationPolicy";
 import { buildDynamicCopFromFabric } from "./src/domain/dynamicCopFromFabric";
 import { resolveParticipantOperationalContext } from "./src/domain/participantOperationalContext";
+import { buildStormFireAdvisoryContext, generateBoundedAdvisory } from "./src/domain/aiDecisionSupport";
 import { logisticsRouter } from "./src/services/logistics/logisticsApi";
 import { stormFireLogisticsService } from "./src/services/logistics/logisticsService";
 import { bootstrapStormFireDevelopmentScenario } from "./src/platform/stormFireBootstrap";
+import { stormFireServiceFabric } from "./src/service-fabric/serviceFabric";
 import type { CanonicalOperationalObject } from "./src/types";
 
 dotenv.config({ path: ".env.local" });
@@ -29,13 +31,16 @@ app.get("/api/participants", (_req, res) => res.json(runtime.state.participants)
 app.get("/api/objects", (_req, res) => res.json(runtime.state.objects));
 app.get("/api/events", (_req, res) => res.json(runtime.state.events));
 app.get("/api/alerts", (_req, res) => res.json(runtime.state.alerts));
-app.get("/api/services", (_req, res) => res.json(runtime.state.services));
+app.get("/api/services", (_req, res) => res.json(stormFireServiceFabric.list()));
 app.use("/api/logistics", logisticsRouter);
 
 app.get("/api/participant-context/:participantId", (req, res) => {
-  const context = runtime.resolveParticipantContext(req.params.participantId);
-  if (!context) return res.status(404).json({ error: "Participant context not found." });
-  return res.json({ data: context });
+  try {
+    const context = resolveParticipantOperationalContext(req.params.participantId);
+    return res.json({ data: context });
+  } catch (error) {
+    return res.status(404).json({ error: error instanceof Error ? error.message : "Participant context not found." });
+  }
 });
 
 app.post("/api/access/decide", (req, res) => {
@@ -61,10 +66,30 @@ app.post("/api/alerts", (req, res) => {
   if (!req.body?.id || !req.body?.objectId) return res.status(400).json({ error: "Alert requires id and objectId." });
   return res.status(202).json(runtime.publishAlert(req.body));
 });
+
+/**
+ * AI/decision support accepts only a participant context and a question.
+ * It derives the input from the participant's authorized Dynamic COP and
+ * never receives arbitrary React state.
+ */
 app.post("/api/advisory", (req, res) => {
-  const objectCount = runtime.state.objects.length;
-  const alertCount = runtime.state.alerts.filter((alert) => alert.state !== "RESOLVED").length;
-  res.json({ response: `Storm Fire information review: ${objectCount} canonical objects and ${alertCount} unresolved alerts are currently available. Validate provenance, freshness, authorization, relationship routing, and operator acknowledgement before acting.`, participantId: req.body?.participantId ?? null });
+  try {
+    const participantId = typeof req.body?.participantId === "string" ? req.body.participantId : "";
+    const question = typeof req.body?.userQuery === "string" ? req.body.userQuery.trim() : "";
+    if (!participantId) return res.status(400).json({ error: "participantId is required." });
+
+    const context = resolveParticipantOperationalContext(participantId);
+    const cop = buildDynamicCopFromFabric(context);
+    const advisoryContext = buildStormFireAdvisoryContext(cop);
+
+    return res.json({
+      response: generateBoundedAdvisory(advisoryContext, question),
+      participantId,
+      context: advisoryContext,
+    });
+  } catch (error) {
+    return res.status(403).json({ error: error instanceof Error ? error.message : "Authorized decision-support context unavailable." });
+  }
 });
 
 const __filename = fileURLToPath(import.meta.url);
