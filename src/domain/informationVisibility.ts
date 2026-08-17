@@ -1,4 +1,4 @@
-import { stormFireInformationAccess, type StormFireScopePoint } from "./informationAccessResolver";
+import { stormFireInformationAccess, stormFireGeographicScopes, type StormFireScopePoint } from "./geographicScopeEngine";
 import { stormFireAuthorization } from "./authorizationPolicy";
 import type { InformationClassification } from "../contracts/stormFireContracts";
 import type { StormFireResolvedOperationalContext } from "./participantOperationalContext";
@@ -15,9 +15,8 @@ export interface StormFireInformationVisibilityContext {
 export interface StormFireVisibilityDecision { allowed: boolean; reasons: string[]; }
 
 /**
- * COP visibility combines relationship/geographic reachability with the
- * canonical server-side authorization decision. Geometry is evaluated when an
- * actual information point is available; scope IDs remain contextual metadata.
+ * COP visibility combines relationship reachability, geometric scope when
+ * coordinates are available, and the canonical server-side authorization decision.
  */
 export function evaluateStormFireInformationVisibility(
   context: StormFireResolvedOperationalContext,
@@ -36,14 +35,18 @@ export function evaluateStormFireInformationVisibility(
   if (!sameOrganization && !relationshipAllowed) return { allowed: false, reasons: ["Information is outside the participant organizational and relationship context."] };
 
   if (information.geographicScopeId && information.informationPoint) {
-    const geographic = stormFireInformationAccess.decide({
-      sourceParticipantId: information.producerParticipantId ?? information.organizationId,
-      recipientParticipantId: context.participantId,
-      informationType: information.informationType,
-      geographicScopeId: information.geographicScopeId,
-      informationPoint: information.informationPoint,
-    });
-    if (!geographic.allowed) return { allowed: false, reasons: [`GEOGRAPHIC_${geographic.reason}`] };
+    if (information.producerParticipantId && information.producerParticipantId !== context.participantId) {
+      const geographic = stormFireInformationAccess.decide({
+        sourceParticipantId: information.producerParticipantId,
+        recipientParticipantId: context.participantId,
+        informationType: information.informationType,
+        geographicScopeId: information.geographicScopeId,
+        informationPoint: information.informationPoint,
+      });
+      if (!geographic.allowed) return { allowed: false, reasons: [`GEOGRAPHIC_${geographic.reason}`] };
+    } else if (!stormFireGeographicScopes.contains(information.geographicScopeId, information.informationPoint)) {
+      return { allowed: false, reasons: ["Information point is outside the declared geographic scope."] };
+    }
   } else if (information.geographicScopeId && !context.geographicScopeIds.includes(information.geographicScopeId)) {
     return { allowed: false, reasons: ["Information is outside the participant geographic scope."] };
   }
