@@ -26,6 +26,7 @@ export interface StormFireResolvedOperationalContext {
   roleId: string;
   geographicScopeIds: string[];
   relationshipIds: string[];
+  informationRelationshipIds: string[];
   informationClassification?: InformationClassification;
   services: Service[];
 }
@@ -71,6 +72,7 @@ export function resolveParticipantOperationalContext(input: string | StormFirePa
     .map((serviceId) => stormFireServiceFabric.get(serviceId))
     .filter((service): service is Service => Boolean(service && service.status === "ACTIVE"));
 
+  const informationRelationshipIds = [...canonical.informationRelationshipIds];
   return {
     participantId: canonical.participantId,
     organizationIds: [...canonical.organizationIds],
@@ -78,7 +80,8 @@ export function resolveParticipantOperationalContext(input: string | StormFirePa
     organizationId,
     roleId,
     geographicScopeIds: [...canonical.geographicScopeIds],
-    relationshipIds: [...canonical.informationRelationshipIds],
+    relationshipIds: informationRelationshipIds,
+    informationRelationshipIds,
     informationClassification: canonical.classification,
     services,
   };
