@@ -57,11 +57,18 @@ logisticsRouter.post("/resources", async (req, res) => {
 logisticsRouter.post("/requests", async (req, res) => {
   const authenticatedId = requireCapability(res, "LogisticsRequest");
   if (!authenticatedId) return;
-  if (req.body?.requesterParticipantId !== authenticatedId) {
-    return res.status(403).json({ error: "Logistics request requester does not match the authenticated participant." });
-  }
+
   try {
-    const result = await logisticsLifecycle.createRequest(req.body);
+    const request = {
+      ...req.body,
+      requesterParticipantId: authenticatedId,
+    };
+    if (typeof request.id !== "string" || !request.id) return res.status(400).json({ error: "Logistics request id is required." });
+    if (req.body?.requesterParticipantId && req.body.requesterParticipantId !== authenticatedId) {
+      return res.status(403).json({ error: "Logistics request requester does not match the authenticated participant." });
+    }
+
+    const result = await logisticsLifecycle.createRequest(request);
     return res.status(201).json({ data: result.data, eventId: result.eventId, eventPublished: result.published });
   } catch (error) { return res.status(400).json({ error: error instanceof Error ? error.message : "Invalid logistics request." }); }
 });
