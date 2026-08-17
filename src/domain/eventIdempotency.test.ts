@@ -1,17 +1,17 @@
+import assert from "node:assert/strict";
+import test from "node:test";
 import { EventIdempotencyStore } from "./eventIdempotency";
 
-describe("EventIdempotencyStore", () => {
-  it("accepts an event once and rejects a retry", () => {
-    const store = new EventIdempotencyStore();
-    const event = { id: "evt-1", type: "logistics.alert", version: 1 };
-    expect(store.markProcessed(event)).toBe(true);
-    expect(store.markProcessed(event)).toBe(false);
-    expect(store.has(event)).toBe(true);
-  });
+test("EventIdempotencyStore accepts an event once and rejects a retry", () => {
+  const store = new EventIdempotencyStore();
+  const event = { id: "evt-1", type: "logistics.alert", version: 1 };
+  assert.equal(store.markProcessed(event), true);
+  assert.equal(store.markProcessed(event), false);
+  assert.equal(store.has(event), true);
+});
 
-  it("treats versions as distinct event identities", () => {
-    const store = new EventIdempotencyStore();
-    expect(store.markProcessed({ id: "evt-1", type: "logistics.alert", version: 1 })).toBe(true);
-    expect(store.markProcessed({ id: "evt-1", type: "logistics.alert", version: 2 })).toBe(true);
-  });
+test("EventIdempotencyStore treats versions as distinct identities", () => {
+  const store = new EventIdempotencyStore();
+  assert.equal(store.markProcessed({ id: "evt-1", type: "logistics.alert", version: 1 }), true);
+  assert.equal(store.markProcessed({ id: "evt-1", type: "logistics.alert", version: 2 }), true);
 });

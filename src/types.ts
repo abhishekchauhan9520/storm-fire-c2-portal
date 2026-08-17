@@ -1,7 +1,100 @@
+// Canonical platform contracts are authoritative. UI modules may import them from
+// this compatibility barrel, but should prefer ../contracts/stormFireContracts.
+export type {
+  AccessDecision,
+  Alert,
+  ContractVersion,
+  COPContext,
+  Event,
+  EventMetadata,
+  GeographicScope,
+  InformationClassification,
+  InformationObject,
+  InformationRelationship,
+  InformationSubscription,
+  OrganizationKind,
+  OrganizationNode,
+  OrganizationRelationship,
+  OrganizationStatus,
+  Participant,
+  ParticipantContext,
+  ParticipantKind,
+  ParticipantStatus,
+  Policy,
+  PolicyEffect,
+  Provenance,
+  Service,
+  ServiceCapability,
+  ServiceStatus,
+  Workspace,
+} from "./contracts/stormFireContracts";
+
+// UI projection/view-model types. These are deliberately not authoritative
+// operational state and should be derived from platform contracts/projections.
+export type Domain = "LAND" | "AIR" | "MARITIME" | "SPACE" | "CYBER" | "EW" | "LOGISTICS" | "JOINT";
+
+export interface CanonicalOperationalObject {
+  id: string;
+  kind: string;
+  version: number;
+  timestamp: string;
+  sourceParticipantId: string;
+  domains: Domain[];
+  classification: "PUBLIC" | "CONTROLLED" | "RESTRICTED" | "MISSION";
+  confidence: number;
+  geometry?: { lat: number; lon: number; altitude?: number };
+  attributes: Record<string, unknown>;
+}
+
+export interface OperationalAlert {
+  id: string;
+  objectId: string;
+  severity: "INFO" | "WARNING" | "HIGH" | "CRITICAL";
+  state: "OPEN" | "ACKNOWLEDGED" | "RESOLVED";
+  createdAt: string;
+  updatedAt: string;
+  recipients: string[];
+}
+
+export interface InformationEvent {
+  id: string;
+  type: string;
+  occurredAt: string;
+  participantId: string;
+  sequence: number;
+  payload: Record<string, unknown>;
+}
+
 export enum Role {
   COMMANDER = "COMMANDER",
   INTELLIGENCE_OFFICER = "INTELLIGENCE_OFFICER",
-  FRONTLINE_OFFICER = "FRONTLINE_OFFICER"
+  FRONTLINE_OFFICER = "FRONTLINE_OFFICER",
+}
+
+export enum KillChainState {
+  FIND = "FIND",
+  FIX = "FIX",
+  TRACK = "TRACK",
+  TARGET = "TARGET",
+  ENGAGE = "ENGAGE",
+  ASSESS = "ASSESS",
+}
+
+export interface TacticalTrack {
+  id: string;
+  name: string;
+  faction: "BLUE" | "RED" | "NEUTRAL";
+  type: "INFANTRY" | "ARMOR" | "ARTILLERY" | "AIR" | "SATELLITE" | "AIR_DEFENSE" | "NAVAL" | "CYBER_ANOMALY" | "COMMS_HUB";
+  x: number;
+  y: number;
+  status: "ACTIVE" | "ENGAGED" | "RETREAT" | "DESTRUCTED";
+  speed: string;
+  altitude?: string;
+  health: number;
+  coordinates: string;
+  weapons?: string[];
+  lastUpdated: string;
+  sensorSource: string;
 }
 
 export interface TacticalNode {
@@ -11,23 +104,6 @@ export interface TacticalNode {
   status: "ONLINE" | "JAMMED" | "OFFLINE";
   criticality: "CRITICAL" | "HIGH" | "MEDIUM";
   location: string;
-}
-
-export interface TacticalTrack {
-  id: string;
-  name: string;
-  faction: "BLUE" | "RED" | "NEUTRAL";
-  type: "INFANTRY" | "ARMOR" | "ARTILLERY" | "AIR" | "SATELLITE" | "AIR_DEFENSE" | "NAVAL" | "CYBER_ANOMALY" | "COMMS_HUB";
-  x: number; // percentage coordinate 0 to 100 on battlefield map
-  y: number; // percentage coordinate 0 to 100 on battlefield map
-  status: "ACTIVE" | "ENGAGED" | "RETREAT" | "DESTRUCTED";
-  speed: string;
-  altitude?: string;
-  health: number; // 0-100 indicating combat effectiveness
-  coordinates: string; // MGRS/Grid Ref, e.g. "43Q KD 8532 9482"
-  weapons?: string[];
-  lastUpdated: string;
-  sensorSource: string;
 }
 
 export interface CommandSystem {
@@ -59,15 +135,6 @@ export interface TacticalLog {
   message: string;
 }
 
-export enum KillChainState {
-  FIND = "FIND",
-  FIX = "FIX",
-  TRACK = "TRACK",
-  TARGET = "TARGET",
-  ENGAGE = "ENGAGE",
-  ASSESS = "ASSESS"
-}
-
 export interface AdviceMessage {
   id: string;
   role: "system" | "user" | "model";
@@ -76,51 +143,8 @@ export interface AdviceMessage {
   isQuickPrompt?: boolean;
 }
 
-// DELTA COMMS: Element secure chat structures
-export interface DeltaMessage {
-  id: string;
-  sender: string;
-  role: "COMMAND" | "HQ" | "RECON_UNIT" | "AIR_PILOT" | "ARTILLERY_FIRE";
-  text: string;
-  timestamp: string;
-  coordinates?: string; // Quick coordinate map reference pin
-  encryptionStrength: string; // e.g. "AES-ASCON 256"
-}
-
-// DELTA SENSOR FUSION: Tube streams
-export interface DeltaSensor {
-  id: string;
-  name: string;
-  type: "RADAR_SAR" | "EO_THERMAL" | "ACOUSTIC_ARRAY" | "SATELLITE_SWEEP" | "SONAR_BUOY";
-  status: "RECEIVING" | "DEGRADED" | "STANDBY" | "OFFLINE";
-  location: string;
-  strength: number; // Signal strength percentage 0-100
-  recentDetectCount: number;
-  feedUrl?: string; // Mock or visual URL placeholder description
-  healthLog: string;
-}
-
-// DELTA DRONE WARFARE: Vezha UAV items
-export interface DroneInventory {
-  id: string;
-  name: string;
-  type: "RECON_UAV" | "FPV_ATTACK" | "LOITERING_MUNITION" | "SWARM_NODE";
-  battery: number;
-  ammoLoaded?: string;
-  rangeKm: number;
-  state: "STATIONARY" | "PATROL" | "ENGAGED" | "RETURNING";
-  operator: string;
-  latLong: string;
-}
-
-// DELTA KNOWLEDGE GRAPH: Sovereign-Style Entities
-export interface FabricEntity {
-  id: string;
-  name: string;
-  type: "HQ_BUNKER" | "MOBILE_SAM" | "SUPPLY_CONVOY" | "RADAR_TOWER" | "RECON_PATROL";
-  confidence: number; // Entity resolution weight percentage (e.g. 98.4%)
-  associatedTracks: string[]; // Track IDs
-  lastInferred: string;
-  connections: Array<{ targetId: string; relation: string }>;
-}
-
+// Transitional UI-only compatibility records. They are not platform contracts.
+export interface DeltaMessage { id: string; sender: string; role: string; text: string; timestamp: string; coordinates?: string; encryptionStrength: string; }
+export interface DeltaSensor { id: string; name: string; type: string; status: string; location: string; strength: number; recentDetectCount: number; feedUrl?: string; healthLog: string; }
+export interface DroneInventory { id: string; name: string; type: string; battery: number; ammoLoaded?: string; rangeKm: number; state: string; operator: string; latLong: string; }
+export interface FabricEntity { id: string; name: string; type: string; confidence: number; associatedTracks: string[]; lastInferred: string; connections: Array<{ targetId: string; relation: string }>; }
