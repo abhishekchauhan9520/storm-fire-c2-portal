@@ -1,6 +1,13 @@
+import type { Service } from "../contracts/stormFireContracts";
+import { stormFireServiceFabric } from "./serviceFabric";
+
 export type RelationshipAxis = "VERTICAL" | "HORIZONTAL" | "DIAGONAL";
 export type ServiceCapability = "DISCOVER" | "CONSUME" | "CONTRIBUTE" | "RELATE" | "PUBLISH_EVENT" | "PARALLEL_ALERT";
 
+/**
+ * Legacy service contract retained only as an adapter/configuration shape.
+ * The authoritative runtime state lives in the canonical Service Fabric.
+ */
 export interface StormFireServiceManifest {
   id: string;
   name: string;
@@ -50,8 +57,55 @@ export const stormFireServices: StormFireServiceManifest[] = [
   },
 ];
 
+/** Convert the compatibility/configuration manifest into the canonical Service contract. */
+export function toCanonicalService(manifest: StormFireServiceManifest): Service {
+  return {
+    id: manifest.id,
+    name: manifest.name,
+    version: manifest.version,
+    description: manifest.description,
+    capabilities: manifest.capabilities.map((id) => ({ id, name: id })),
+    informationTypesProduced: [...new Set(manifest.produces)],
+    informationTypesConsumed: [...new Set(manifest.consumes)],
+    displaySurfaceIds: [manifest.id],
+    dependencyServiceIds: [],
+    ownerParticipantId: "system",
+    status: manifest.enabled ? "ACTIVE" : "PAUSED",
+  };
+}
+
+/** Convert canonical runtime state back to the compatibility shape for legacy callers. */
+export function fromCanonicalService(service: Service): StormFireServiceManifest {
+  const knownCapabilities = new Set<ServiceCapability>(["DISCOVER", "CONSUME", "CONTRIBUTE", "RELATE", "PUBLISH_EVENT", "PARALLEL_ALERT"]);
+  return {
+    id: service.id,
+    name: service.name,
+    version: service.version,
+    description: service.description ?? "",
+    capabilities: service.capabilities.map((capability) => capability.id).filter((id): id is ServiceCapability => knownCapabilities.has(id as ServiceCapability)),
+    consumes: [...service.informationTypesConsumed],
+    produces: [...service.informationTypesProduced],
+    relationships: ["VERTICAL", "HORIZONTAL", "DIAGONAL"],
+    enabled: service.status === "ACTIVE" || service.status === "REGISTERED",
+  };
+}
+
+/**
+ * Register configuration into the authoritative Service Fabric.
+ * Re-registering an existing service is idempotent and never creates a second store.
+ */
 export function registerStormFireService(service: StormFireServiceManifest): StormFireServiceManifest {
   const errors = validateServiceContract(service);
   if (errors.length) throw new Error(`Storm Fire service contract rejected: ${errors.join("; ")}`);
-  return service;
+
+  const current = stormFireServiceFabric.get(service.id);
+  if (!current) {
+    return fromCanonicalService(stormFireServiceFabric.register(toCanonicalService(service)));
+  }
+
+  return fromCanonicalService(current);
+}
+
+export function getCanonicalStormFireService(id: string): Service | undefined {
+  return stormFireServiceFabric.get(id);
 }
