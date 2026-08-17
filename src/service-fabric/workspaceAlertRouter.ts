@@ -9,7 +9,7 @@ export interface WorkspaceAlertDelivery { workspaceId: string; participantId: st
 export class WorkspaceAlertRouter {
   private deliveries: WorkspaceAlertDelivery[] = [];
   private unsubscribe?: () => void;
-  start(): void { this.stop(); this.unsubscribe = stormFireInformationFabric.subscribe((record) => this.route(record)); }
+  start(): void { this.stop(); this.unsubscribe = stormFireInformationFabric.subscribe((records) => records.forEach((record) => this.route(record))); }
   private route(record: CanonicalInformationRecord): void {
     if (!this.isAlertLike(record)) return;
     for (const workspace of stormFireWorkspaceFabric.listWorkspaces().filter((item) => item.active)) {
