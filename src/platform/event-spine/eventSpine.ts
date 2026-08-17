@@ -1,6 +1,7 @@
 import type { Event } from "../../contracts/stormFireContracts";
 import { stormFireInformationFabric } from "../../domain/informationFabric";
 import { InMemoryEventJournal, type EventJournal } from "../../domain/eventJournal";
+import { FileEventJournal } from "../../domain/fileEventJournal";
 
 export interface EventHandler<T = unknown> {
   (event: Event<T>): void | Promise<void>;
@@ -10,7 +11,7 @@ export interface EventHandler<T = unknown> {
 export class EventSpine {
   private readonly handlers = new Map<string, Set<EventHandler>>();
 
-  constructor(private readonly journal: EventJournal = new InMemoryEventJournal()) {}
+  constructor(private readonly journal: EventJournal = process.env.NODE_ENV === "test" ? new InMemoryEventJournal() : new FileEventJournal()) {}
 
   subscribe<T>(eventType: string, handler: EventHandler<T>): () => void {
     const handlers = this.handlers.get(eventType) ?? new Set<EventHandler>();
