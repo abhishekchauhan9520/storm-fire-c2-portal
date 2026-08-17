@@ -4,7 +4,6 @@ import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import { createStormFireRuntime } from "./src/core/stormFireRuntime";
 import { stormFireAuthorization } from "./src/domain/authorizationPolicy";
-import { stormFireInformationFabric } from "./src/domain/informationFabric";
 import { buildDynamicCopFromFabric } from "./src/domain/dynamicCopFromFabric";
 import { resolveParticipantOperationalContext } from "./src/domain/participantOperationalContext";
 import { logisticsRouter } from "./src/services/logistics/logisticsApi";
@@ -40,11 +39,12 @@ app.post("/api/access/decide", (req, res) => {
 });
 
 app.get("/api/cop/:participantId", (req, res) => {
-  const context = runtime.resolveParticipantContext(req.params.participantId);
-  if (!context || context.organizationIds.length === 0 || context.roleIds.length === 0) return res.status(404).json({ error: "A resolved participant context with organization and role is required." });
-  const capabilities = context.serviceIds.flatMap((serviceId) => runtime.state.services.find((service) => service.id === serviceId)?.capabilities.map((capability) => capability.id) ?? []);
-  const operationalContext = resolveParticipantOperationalContext({ participantId: context.participantId, organizationId: context.organizationIds[0], roleId: context.roleIds[0], geographicScopeIds: context.geographicScopeIds, relationshipIds: context.informationRelationshipIds, serviceIds: context.serviceIds, capabilities });
-  return res.json({ data: buildDynamicCopFromFabric(operationalContext) });
+  try {
+    const operationalContext = resolveParticipantOperationalContext(req.params.participantId);
+    return res.json({ data: buildDynamicCopFromFabric(operationalContext) });
+  } catch (error) {
+    return res.status(404).json({ error: error instanceof Error ? error.message : "Canonical participant context is unavailable." });
+  }
 });
 
 app.post("/api/objects", (req, res) => {
