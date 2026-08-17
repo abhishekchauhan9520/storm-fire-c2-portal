@@ -196,7 +196,7 @@ async function startServer() {
   } else {
     const distPath = path.join(__dirname, "dist");
     app.use(express.static(distPath));
-    app.get("*", (_req, res) => res.sendFile(path.join(distPath, "index.html"));
+    app.get("*", (_req, res) => res.sendFile(path.join(distPath, "index.html")));
   }
   app.listen(PORT, "0.0.0.0", () => console.log(`[STORM-FIRE] Information runtime operational on port ${PORT}`));
 }
