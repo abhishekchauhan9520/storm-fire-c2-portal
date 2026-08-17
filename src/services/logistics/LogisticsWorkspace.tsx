@@ -38,6 +38,20 @@ export function LogisticsWorkspace() {
 
   useEffect(() => { void load(); }, [load]);
 
+  useEffect(() => {
+    const stream = new EventSource("/api/events/stream");
+    const refresh = () => { void load(); };
+    stream.addEventListener("cop.invalidate", refresh);
+    stream.addEventListener("stream.ready", () => setError(null));
+    stream.onerror = () => {
+      // EventSource retries automatically; manual refresh remains available.
+    };
+    return () => {
+      stream.removeEventListener("cop.invalidate", refresh);
+      stream.close();
+    };
+  }, [load]);
+
   const visibleRequests = useMemo(
     () => filter === "ALL" ? requests : requests.filter(request => request.status === filter),
     [filter, requests],
@@ -78,7 +92,7 @@ export function LogisticsWorkspace() {
       <div>
         <div style={{ fontSize: 12, letterSpacing: 2, opacity: .65 }}>STORM FIRE SERVICE FABRIC</div>
         <h1 style={{ margin: "4px 0", fontSize: 24 }}>Logistics Workspace</h1>
-        <div style={{ opacity: .65, fontSize: 13 }}>Authenticated participant sustainment environment</div>
+        <div style={{ opacity: .65, fontSize: 13 }}>Authenticated participant sustainment environment · live platform updates enabled</div>
       </div>
       <button onClick={() => void load()} disabled={loading}>{loading ? "Refreshing…" : "Refresh"}</button>
     </header>
