@@ -1,6 +1,6 @@
 export interface StormFireScopePoint { latitude: number; longitude: number; }
 
-export interface StormFireGeographicScope { id: string; name: string; polygon?: StormFireScopePoint[]; radiusKm?: number; center?: StormFireScopePoint; enabled: boolean; }
+export interface StormFireGeographicScope { id: string; name: string; label?: string; polygon?: StormFireScopePoint[]; radiusKm?: number; center?: StormFireScopePoint; enabled: boolean; }
 
 /** Evaluates coarse operational-area membership. Polygon uses a ray-casting test; radius uses great-circle distance. */
 export class GeographicScopeEngine {
@@ -8,9 +8,11 @@ export class GeographicScopeEngine {
 
   register(scope: StormFireGeographicScope): void {
     if (!scope.id) throw new Error("Geographic scope requires an id.");
+    if (!scope.name && !scope.label) throw new Error("Geographic scope requires a name or label.");
     if (this.scopes.has(scope.id)) throw new Error(`Geographic scope ${scope.id} already exists.`);
     if (!scope.polygon && !(scope.center && scope.radiusKm !== undefined)) throw new Error("Scope requires a polygon or center/radius.");
-    this.scopes.set(scope.id, { ...scope, polygon: scope.polygon ? [...scope.polygon] : undefined });
+    const name = scope.name || scope.label!;
+    this.scopes.set(scope.id, { ...scope, name, polygon: scope.polygon ? [...scope.polygon] : undefined });
   }
 
   get(id: string): StormFireGeographicScope | undefined { return this.scopes.get(id); }
