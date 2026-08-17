@@ -1,4 +1,4 @@
-import type { ParticipantContext } from "../contracts/stormFireContracts";
+import type { InformationClassification, ParticipantContext } from "../contracts/stormFireContracts";
 import { stormFireOrganizationGraph } from "./organizationGraph";
 import { stormFireParticipants } from "../service-fabric/participantModel";
 import { stormFireServiceFabric } from "../service-fabric/serviceFabric";
@@ -13,9 +13,14 @@ export interface ParticipantAssignment {
   subscriptionIds?: string[];
   workspaceIds: string[];
   policyIds?: string[];
+  classification?: InformationClassification;
 }
 
-/** Resolves the participant-specific operational environment from canonical state. */
+/**
+ * Canonical participant-context registry.
+ * Assignments are the mutable staffing/context boundary; ParticipantContext is
+ * the only resolved contract consumed by downstream platform services.
+ */
 export class ParticipantContextRegistry {
   private assignments = new Map<string, ParticipantAssignment>();
 
@@ -27,6 +32,7 @@ export class ParticipantContextRegistry {
     for (const serviceId of this.serviceIdsFor(assignment)) {
       if (!stormFireServiceFabric.get(serviceId)) throw new Error(`Service ${serviceId} is not registered.`);
     }
+
     const normalized: ParticipantAssignment = {
       ...assignment,
       organizationIds: [...assignment.organizationIds],
@@ -38,8 +44,13 @@ export class ParticipantContextRegistry {
       workspaceIds: [...assignment.workspaceIds],
       policyIds: [...(assignment.policyIds ?? [])],
     };
+
     this.assignments.set(assignment.participantId, normalized);
     return this.resolve(assignment.participantId)!;
+  }
+
+  reassign(participantId: string, assignment: Omit<ParticipantAssignment, "participantId">): ParticipantContext {
+    return this.assign({ participantId, ...assignment });
   }
 
   getAssignment(participantId: string): ParticipantAssignment | undefined {
@@ -50,7 +61,8 @@ export class ParticipantContextRegistry {
   resolve(participantId: string): ParticipantContext | undefined {
     const assignment = this.assignments.get(participantId);
     const participant = stormFireParticipants.get(participantId);
-    if (!assignment || !participant) return undefined;
+    if (!assignment || !participant || !participant.enabled) return undefined;
+
     return {
       participantId,
       organizationIds: [...assignment.organizationIds],
@@ -61,6 +73,7 @@ export class ParticipantContextRegistry {
       subscriptionIds: [...(assignment.subscriptionIds ?? [])],
       workspaceIds: [...assignment.workspaceIds],
       policyIds: [...(assignment.policyIds ?? [])],
+      classification: assignment.classification,
       resolvedAt: new Date().toISOString(),
     };
   }
@@ -68,6 +81,7 @@ export class ParticipantContextRegistry {
   effectiveOrganizations(participantId: string): ReturnType<typeof stormFireOrganizationGraph.list> {
     const context = this.resolve(participantId);
     if (!context) return [];
+
     const nodes = new Map<string, ReturnType<typeof stormFireOrganizationGraph.list>[number]>();
     for (const id of context.organizationIds) {
       const node = stormFireOrganizationGraph.get(id);
