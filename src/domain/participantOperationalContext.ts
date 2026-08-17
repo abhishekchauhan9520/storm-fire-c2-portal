@@ -26,7 +26,8 @@ export interface StormFireResolvedOperationalContext {
   roleId: string;
   geographicScopeIds: string[];
   relationshipIds: string[];
-  informationRelationshipIds: string[];
+  /** Transitional alias for callers that still use the older property name. */
+  informationRelationshipIds?: string[];
   informationClassification?: InformationClassification;
   services: Service[];
 }
