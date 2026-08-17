@@ -1,5 +1,5 @@
 import { InformationFabric, StormFireInformationEnvelope } from "./informationFabric";
-import { InformationRelationshipRegistry } from "./informationRelationships";
+import { InformationRelationshipEngine, stormFireInformationRelationships } from "./informationRelationshipEngine";
 import { ParallelAlertRouter } from "./parallelAlertRouter";
 
 export interface InformationRouteTarget {
@@ -18,7 +18,7 @@ export class StormFireInformationRouter {
 
   constructor(
     private readonly fabric: InformationFabric,
-    private readonly relationships: InformationRelationshipRegistry,
+    private readonly relationships: InformationRelationshipEngine = stormFireInformationRelationships,
   ) {
     this.alerts = new ParallelAlertRouter(fabric, relationships);
   }
@@ -35,18 +35,14 @@ export class StormFireInformationRouter {
   }
 
   private authorizedTargets<T>(message: StormFireInformationEnvelope<T>, targets: string[]): InformationRouteTarget[] {
-    if (!message.producerParticipantId) return [...new Set(targets)].map(participantId => ({ participantId }));
+    if (!message.producerParticipantId) return [...new Set(targets)].map((participantId) => ({ participantId }));
 
-    return [...new Set(targets)].flatMap(participantId => {
-      const relationship = this.relationships.forParticipant(message.producerParticipantId!)
-        .find(r => r.fromParticipantId === message.producerParticipantId && r.toParticipantId === participantId &&
-          (r.informationTypes.includes("*") || r.informationTypes.includes(message.type)));
-      return relationship ? [{ participantId, relationshipId: relationship.id }] : [];
+    return [...new Set(targets)].flatMap((participantId) => {
+      const directPath = this.relationships.pathsFrom(message.producerParticipantId!, message.type)
+        .find((path) => path.participantIds[path.participantIds.length - 1] === participantId && path.participantIds.length === 2);
+      return directPath ? [{ participantId, relationshipId: directPath.relationshipIds[0] }] : [];
     });
   }
 }
 
-export const stormFireInformationRouter = new StormFireInformationRouter(
-  new InformationFabric(),
-  new InformationRelationshipRegistry(),
-);
+export const stormFireInformationRouter = new StormFireInformationRouter(new InformationFabric(), stormFireInformationRelationships);
