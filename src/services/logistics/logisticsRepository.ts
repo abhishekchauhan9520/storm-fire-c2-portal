@@ -1,4 +1,4 @@
-import { LogisticsRequest, LogisticsRequestStatus, LogisticsResource } from "./logisticsService";
+import type { LogisticsRequest, LogisticsRequestStatus, LogisticsResource } from "./logisticsService";
 
 export interface LogisticsRepository {
   saveResource(resource: LogisticsResource): LogisticsResource;
@@ -12,6 +12,7 @@ export interface LogisticsRepository {
 export class InMemoryLogisticsRepository implements LogisticsRepository {
   private resources = new Map<string, LogisticsResource>();
   private requests = new Map<string, LogisticsRequest>();
+
   saveResource(resource: LogisticsResource) { this.resources.set(resource.id, { ...resource }); return { ...resource }; }
   getResource(id: string) { const r = this.resources.get(id); return r ? { ...r } : undefined; }
   listResources() { return [...this.resources.values()].map(r => ({ ...r })); }
