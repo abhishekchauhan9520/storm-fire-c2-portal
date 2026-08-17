@@ -1,7 +1,8 @@
-import { stormFireEventSpine } from "../../platform/event-spine/eventSpine";
+import { stormFireInformationFabric } from "../../domain/informationFabric";
 import { AlertDispatchResult, AlertDispatchService } from "../../domain/alertDispatch";
 import { InformationPolicyRegistry } from "../../domain/informationPolicy";
 import { InformationRelationshipEngine, stormFireInformationRelationships } from "../../domain/informationRelationshipEngine";
+import { stormFireEventSpine } from "../../platform/event-spine/eventSpine";
 import type { Event } from "../../contracts/stormFireContracts";
 import { LogisticsRequest, LogisticsService } from "./logisticsService";
 
@@ -43,21 +44,23 @@ export class LogisticsWorkflow {
 
     let alert: AlertDispatchResult | undefined;
     if (request.priority === "HIGH" || request.priority === "CRITICAL") {
-      const alertEvent: Event<Record<string, unknown>> = {
-        metadata: {
-          ...requestEvent.metadata,
-          eventId: `logistics.alert:${randomId()}`,
-          eventType: "LogisticsRequestAlert",
-        },
-        payload: {
-          requestId: request.id,
-          priority: request.priority,
-          resourceId: request.resourceId,
-          quantity: request.quantity,
-        },
+      const alertEnvelope = {
+        id: `logistics.alert:${randomId()}`,
+        kind: "EVENT" as const,
+        type: "logistics.alert",
+        schemaVersion: 1,
+        version: 1,
+        occurredAt: now,
+        producerServiceId: "logistics",
+        producerParticipantId: request.requesterParticipantId,
+        correlationId: request.id,
+        classification: "CONTROLLED" as const,
+        geographicScopeIds: scopeIds,
+        provenance: { sourceId: "logistics", observedAt: now, receivedAt: now },
+        payload: { requestId: request.id, priority: request.priority, resourceId: request.resourceId, quantity: request.quantity },
       };
-      alert = new AlertDispatchService(undefined, this.policies, this.relationships)
-        .dispatch(alertEvent, recipients, policyIds, scopeIds);
+      alert = new AlertDispatchService(stormFireInformationFabric, this.policies, this.relationships)
+        .dispatch(alertEnvelope, recipients, policyIds, scopeIds);
     }
 
     return { request, requestEventId: requestEvent.metadata.eventId, requestPublished, ...(alert ? { alert } : {}) };
