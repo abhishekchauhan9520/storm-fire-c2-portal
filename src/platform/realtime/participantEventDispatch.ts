@@ -45,7 +45,7 @@ export function dispatchParticipantEvent(event: Event<unknown>): string[] {
         serviceId: "logistics",
         organizationIds: context.organizationIds,
         roleIds: context.roleIds,
-        relationshipIds: context.informationRelationshipIds,
+        relationshipIds: context.relationshipIds,
         geographicScopeIds: context.geographicScopeIds,
         classification: event.metadata.classification,
       });
