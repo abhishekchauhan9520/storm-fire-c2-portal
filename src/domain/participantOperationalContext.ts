@@ -26,6 +26,8 @@ export interface StormFireResolvedOperationalContext {
   roleId: string;
   geographicScopeIds: string[];
   relationshipIds: string[];
+  /** Compatibility alias for consumers migrated from the canonical contract name. */
+  informationRelationshipIds: string[];
   informationClassification?: InformationClassification;
   services: Service[];
 }
@@ -71,6 +73,7 @@ export function resolveParticipantOperationalContext(input: string | StormFirePa
     .map((serviceId) => stormFireServiceFabric.get(serviceId))
     .filter((service): service is Service => Boolean(service && service.status === "ACTIVE"));
 
+  const relationshipIds = [...canonical.informationRelationshipIds];
   return {
     participantId: canonical.participantId,
     organizationIds: [...canonical.organizationIds],
@@ -78,7 +81,8 @@ export function resolveParticipantOperationalContext(input: string | StormFirePa
     organizationId,
     roleId,
     geographicScopeIds: [...canonical.geographicScopeIds],
-    relationshipIds: [...canonical.informationRelationshipIds],
+    relationshipIds,
+    informationRelationshipIds: [...relationshipIds],
     informationClassification: canonical.classification,
     services,
   };
