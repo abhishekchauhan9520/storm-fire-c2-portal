@@ -1,94 +1,41 @@
-import type { StormFireEvent } from "./serviceEventBus";
 import { stormFireEventBus } from "./serviceEventBus";
-import { stormFireRelationshipEngine } from "./relationshipEngine";
 
-export type AlertPriority = "INFO" | "WARNING" | "CRITICAL";
+export type AlertPriority = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
-export interface ParallelAlertPolicy {
+export interface StormFireParallelAlert {
   id: string;
-  source: string;
+  sourceParticipantId: string;
+  title: string;
+  message: string;
   priority: AlertPriority;
-  recipients: string[];
-  relationshipAxes?: Array<"VERTICAL" | "HORIZONTAL" | "DIAGONAL">;
-  enabled: boolean;
+  recipientIds: string[];
+  createdAt: string;
 }
 
-export interface AlertDelivery {
-  alertId: string;
-  recipient: string;
-  priority: AlertPriority;
-  deliveredAt: string;
-  status: "DELIVERED" | "SKIPPED";
-}
+class ParallelAlertFabric {
+  publish(input: Omit<StormFireParallelAlert, "id" | "createdAt">): StormFireParallelAlert {
+    if (!input.recipientIds.length) throw new Error("Parallel alert requires at least one recipient.");
+    const alert: StormFireParallelAlert = {
+      ...input,
+      id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      createdAt: new Date().toISOString(),
+    };
 
-export interface ParallelAlertResult {
-  alertId: string;
-  source: string;
-  priority: AlertPriority;
-  deliveries: AlertDelivery[];
-}
-
-/**
- * Parallel alert distribution for the shared information environment.
- * This is a delivery/orchestration layer; it does not perform operational
- * action or weapon/fire-control decisions.
- */
-export class ParallelAlertFabric {
-  private policies = new Map<string, ParallelAlertPolicy>();
-
-  registerPolicy(policy: ParallelAlertPolicy): void {
-    if (!policy.id || !policy.source || policy.recipients.length === 0) {
-      throw new Error("Alert policy requires an id, source, and at least one recipient.");
-    }
-    this.policies.set(policy.id, policy);
-  }
-
-  removePolicy(id: string): boolean {
-    return this.policies.delete(id);
-  }
-
-  listPolicies(): ParallelAlertPolicy[] {
-    return [...this.policies.values()];
-  }
-
-  dispatch(event: StormFireEvent, priority: AlertPriority): ParallelAlertResult {
-    const alertId = `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const matchingPolicies = [...this.policies.values()].filter(
-      (policy) => policy.enabled && policy.source === event.sourceService && policy.priority === priority,
-    );
-
-    const recipients = new Set<string>();
-    matchingPolicies.forEach((policy) => policy.recipients.forEach((recipient) => recipients.add(recipient)));
-
-    // Optional relationship expansion: a policy can include participants connected
-    // through one or more approved relationship axes.
-    matchingPolicies.forEach((policy) => {
-      (policy.relationshipAxes ?? []).forEach((axis) => {
-        stormFireRelationshipEngine.query({ axis, activeOnly: true }).forEach((relationship) => {
-          recipients.add(relationship.from === event.sourceService ? relationship.to : relationship.from);
-        });
-      });
-    });
-
-    const deliveries: AlertDelivery[] = [...recipients].map((recipient) => ({
-      alertId,
-      recipient,
-      priority,
-      deliveredAt: new Date().toISOString(),
-      status: "DELIVERED",
-    }));
-
-    // The alert remains an event in the shared spine so other subscribed
-    // application components can observe the same alert independently.
     stormFireEventBus.publish({
       type: "ALERT",
-      sourceService: event.sourceService,
-      payload: { alertId, priority, originalEventId: event.id },
-      recipients: deliveries.map((delivery) => delivery.recipient),
+      sourceService: input.sourceParticipantId,
+      payload: {
+        title: input.title,
+        message: input.message,
+        priority: input.priority,
+        distributionMode: "PARALLEL",
+        recipientCount: input.recipientIds.length,
+      },
+      recipients: input.recipientIds,
     });
 
-    return { alertId, source: event.sourceService, priority, deliveries };
+    return alert;
   }
 }
 
-export const parallelAlertFabric = new ParallelAlertFabric();
+export const stormFireParallelAlertFabric = new ParallelAlertFabric();
