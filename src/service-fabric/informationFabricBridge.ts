@@ -4,6 +4,7 @@ import { stormFireEventBus, type StormFireEvent } from "./serviceEventBus";
 import { stormFireRelationshipFabric } from "./relationshipFabric";
 
 export type InformationListener = (records: CanonicalInformationRecord[]) => void;
+export type InformationDeliveryListener = (record: CanonicalInformationRecord) => void;
 
 export interface InformationQuery {
   kind?: CanonicalInformationRecord["kind"];
@@ -12,14 +13,44 @@ export interface InformationQuery {
   includeStale?: boolean;
 }
 
+interface InformationSubscription {
+  participantId: string;
+  informationTypes: Set<string>;
+  listener: InformationDeliveryListener;
+}
+
 class InformationFabricBridge {
   private records = new Map<string, CanonicalInformationRecord>();
   private listeners = new Set<InformationListener>();
+  private subscriptions = new Map<string, Set<InformationSubscription>>();
 
   subscribe(listener: InformationListener): () => void {
     this.listeners.add(listener);
     listener(this.snapshot());
     return () => this.listeners.delete(listener);
+  }
+
+  subscribeParticipant(
+    participantId: string,
+    informationTypes: string[],
+    listener: InformationDeliveryListener,
+  ): () => void {
+    if (!informationTypes.length) throw new Error("Information subscription requires at least one information type.");
+
+    const subscription: InformationSubscription = {
+      participantId,
+      informationTypes: new Set(informationTypes),
+      listener,
+    };
+    const subscriptions = this.subscriptions.get(participantId) ?? new Set<InformationSubscription>();
+    subscriptions.add(subscription);
+    this.subscriptions.set(participantId, subscriptions);
+
+    return () => {
+      const current = this.subscriptions.get(participantId);
+      current?.delete(subscription);
+      if (current && current.size === 0) this.subscriptions.delete(participantId);
+    };
   }
 
   snapshot(): CanonicalInformationRecord[] {
@@ -48,10 +79,28 @@ class InformationFabricBridge {
     );
   }
 
+  private deliverToSubscribers(record: CanonicalInformationRecord): void {
+    for (const [participantId, subscriptions] of this.subscriptions) {
+      if (!this.isAuthorizedConsumer(record, participantId)) continue;
+      for (const subscription of subscriptions) {
+        if (!subscription.informationTypes.has(record.kind)) continue;
+        subscription.listener(record);
+      }
+    }
+  }
+
   ingest(record: CanonicalInformationRecord): CanonicalInformationRecord {
     const previous = this.records.get(record.id);
-    const next = previous ? { ...record, version: Math.max(record.version, previous.version + 1) } : record;
+    const next = previous ? {
+      ...record,
+      version: Math.max(record.version, previous.version + 1),
+      provenance: {
+        ...record.provenance,
+        lineage: Array.from(new Set([...previous.provenance.lineage, ...record.provenance.lineage])),
+      },
+    } : record;
     this.records.set(record.id, next);
+    this.deliverToSubscribers(next);
     this.listeners.forEach((listener) => listener(this.snapshot()));
     return next;
   }
