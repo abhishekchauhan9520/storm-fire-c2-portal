@@ -44,7 +44,7 @@ export default function App() {
   const [workspace, setWorkspace] = useState<Workspace>("MONITOR");
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedTrack, setSelectedTrack] = useState<TacticalTrack | null>(null);
-  const [assessmentState, setAssessmentState] = useState<KillChainState>(KillChainState.FIND);
+  const [assessmentState, setAssessmentState] = useState<KillChainState>("FIND" as KillChainState);
   const [context, setContext] = useState<ParticipantContextProjection | null>(null);
   const [events, setEvents] = useState<OperationalEventProjection[]>([]);
   const [alerts, setAlerts] = useState<OperationalAlertProjection[]>([]);
