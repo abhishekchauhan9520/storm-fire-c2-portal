@@ -1,5 +1,6 @@
 import type { StormFireServiceManifest } from "./serviceRegistry";
 import { stormFirePolicyEngine, type ServiceIdentity } from "./servicePolicy";
+import { validateServiceCompatibility, type CompatibilityResult } from "./serviceCompatibility";
 
 export type ServiceLifecycleState =
   | "DISCOVERED"
@@ -15,18 +16,19 @@ export interface ServiceLifecycleRecord {
   service: StormFireServiceManifest;
   state: ServiceLifecycleState;
   identity?: ServiceIdentity;
+  compatibility?: CompatibilityResult;
   updatedAt: string;
   reason?: string;
 }
 
 const transitions: Record<ServiceLifecycleState, ServiceLifecycleState[]> = {
-  DISCOVERED: ["REGISTERED", "DISABLED"],
-  REGISTERED: ["VALIDATED", "DISABLED"],
-  VALIDATED: ["AUTHORIZED", "DISABLED"],
+  DISCOVERED: ["REGISTERED", "DISABLED", "QUARANTINED"],
+  REGISTERED: ["VALIDATED", "DISABLED", "QUARANTINED"],
+  VALIDATED: ["AUTHORIZED", "DISABLED", "QUARANTINED"],
   AUTHORIZED: ["ENABLED", "QUARANTINED", "DISABLED"],
   ENABLED: ["MONITORED", "QUARANTINED", "DISABLED"],
   MONITORED: ["QUARANTINED", "DISABLED"],
-  DISABLED: ["REGISTERED"],
+  DISABLED: ["REGISTERED", "QUARANTINED"],
   QUARANTINED: ["REGISTERED", "DISABLED"],
 };
 
@@ -34,10 +36,13 @@ export class StormFireServiceLifecycleManager {
   private records = new Map<string, ServiceLifecycleRecord>();
 
   discover(service: StormFireServiceManifest): ServiceLifecycleRecord {
+    const compatibility = validateServiceCompatibility(service);
     const record: ServiceLifecycleRecord = {
       service,
       state: "DISCOVERED",
+      compatibility,
       updatedAt: new Date().toISOString(),
+      reason: compatibility.compatible ? undefined : compatibility.errors.join("; "),
     };
     this.records.set(service.id, record);
     return record;
@@ -49,7 +54,6 @@ export class StormFireServiceLifecycleManager {
     if (!transitions[record.state].includes(next)) {
       throw new Error(`Invalid lifecycle transition: ${record.state} -> ${next}`);
     }
-
     record.state = next;
     record.updatedAt = new Date().toISOString();
     record.reason = reason;
@@ -57,10 +61,24 @@ export class StormFireServiceLifecycleManager {
   }
 
   register(serviceId: string) { return this.transition(serviceId, "REGISTERED"); }
-  validate(serviceId: string) { return this.transition(serviceId, "VALIDATED"); }
+
+  validate(serviceId: string) {
+    const record = this.records.get(serviceId);
+    if (!record) throw new Error(`Service has not been discovered: ${serviceId}`);
+    const compatibility = validateServiceCompatibility(record.service);
+    record.compatibility = compatibility;
+    if (!compatibility.compatible) {
+      return this.transition(serviceId, "QUARANTINED", `Compatibility validation failed: ${compatibility.errors.join("; ")}`);
+    }
+    return this.transition(serviceId, "VALIDATED");
+  }
+
   authorize(serviceId: string, identity: ServiceIdentity) {
     const record = this.records.get(serviceId);
     if (!record) throw new Error(`Service has not been discovered: ${serviceId}`);
+    if (record.state !== "VALIDATED") {
+      return this.transition(serviceId, "QUARANTINED", "Authorization attempted before successful compatibility validation.");
+    }
     if (identity.serviceId !== serviceId || identity.trustLevel === "QUARANTINED") {
       return this.transition(serviceId, "QUARANTINED", "Identity validation failed.");
     }
