@@ -8,7 +8,7 @@ import { buildDynamicCopFromFabric } from "./src/domain/dynamicCopFromFabric";
 import { resolveParticipantOperationalContext } from "./src/domain/participantOperationalContext";
 import { buildStormFireAdvisoryContext, generateBoundedAdvisory } from "./src/domain/aiDecisionSupport";
 import { logisticsRouter } from "./src/services/logistics/logisticsApi";
-import { stormFireLogisticsService } from "./src/services/logistics/logisticsService";
+import { logisticsRepositoryReady, logisticsService as stormFireLogisticsService } from "./src/services/logistics/logisticsContainer";
 import { bootstrapStormFireDevelopmentScenario } from "./src/platform/stormFireBootstrap";
 import { stormFireServiceFabric } from "./src/service-fabric/serviceFabric";
 import type { CanonicalOperationalObject } from "./src/types";
@@ -152,6 +152,7 @@ app.post("/api/advisory", (req, res) => {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 async function startServer() {
+  await logisticsRepositoryReady;
   if (!isProduction) {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
