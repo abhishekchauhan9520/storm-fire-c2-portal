@@ -6,19 +6,24 @@ export interface ServiceInventoryEntry extends ServiceLifecycleRecord {
   contractErrors: string[];
 }
 
-/** Runtime inventory that turns declared service manifests into lifecycle-managed services. */
+/**
+ * Runtime inventory for the compatibility service manifest layer.
+ * Registration itself is delegated to the canonical Service Fabric; lifecycle
+ * records are operational metadata and are not a second service-state store.
+ */
 export class StormFireServiceRegistryRuntime {
   bootstrap(services: StormFireServiceManifest[] = stormFireServices): ServiceInventoryEntry[] {
     return services.map((service) => {
       const errors: string[] = [];
+      let registered: StormFireServiceManifest = service;
       try {
-        registerStormFireService(service);
+        registered = registerStormFireService(service);
       } catch (error) {
         errors.push(error instanceof Error ? error.message : String(error));
       }
 
       const existing = stormFireServiceLifecycle.get(service.id);
-      const record = existing ?? stormFireServiceLifecycle.discover(service);
+      const record = existing ?? stormFireServiceLifecycle.discover(registered);
       return {
         ...record,
         contractValid: errors.length === 0,
@@ -28,12 +33,11 @@ export class StormFireServiceRegistryRuntime {
   }
 
   inventory(): ServiceInventoryEntry[] {
-    return stormFireServiceLifecycle.list().map((record) => {
-      const errors: string[] = [];
-      try { registerStormFireService(record.service); }
-      catch (error) { errors.push(error instanceof Error ? error.message : String(error)); }
-      return { ...record, contractValid: errors.length === 0, contractErrors: errors };
-    });
+    return stormFireServiceLifecycle.list().map((record) => ({
+      ...record,
+      contractValid: record.compatibility?.compatible ?? false,
+      contractErrors: record.compatibility?.errors ?? [],
+    }));
   }
 }
 
