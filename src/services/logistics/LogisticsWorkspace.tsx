@@ -56,7 +56,6 @@ export function LogisticsWorkspace() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: `log-${crypto.randomUUID()}`,
-          requesterParticipantId: "operator-command",
           resourceId,
           quantity: Number(quantity),
           priority,
