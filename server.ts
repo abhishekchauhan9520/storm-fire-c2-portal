@@ -43,8 +43,7 @@ function authenticatedParticipantId(req: Request): string | null {
 function requireParticipant(req: Request, res: express.Response, next?: express.NextFunction): string | null {
   const participantId = authenticatedParticipantId(req);
   if (!participantId) {
-    if (next) res.status(401).json({ error: "Authenticated participant identity is required for operational data access." });
-    else res.status(401).json({ error: "Authenticated participant identity is required for operational data access." });
+    res.status(401).json({ error: "Authenticated participant identity is required for operational data access." });
     return null;
   }
   try {
@@ -53,6 +52,7 @@ function requireParticipant(req: Request, res: express.Response, next?: express.
     res.status(403).json({ error: error instanceof Error ? error.message : "Participant context is unavailable." });
     return null;
   }
+  res.locals.stormFireParticipantId = participantId;
   if (next) next();
   return participantId;
 }
@@ -77,8 +77,6 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-// Canonical public metadata. Operational objects/events/alerts are exposed only
-// through participant-authorized projections, not as raw runtime state dumps.
 app.get("/api/services", (_req, res) => res.json(stormFireServiceFabric.list()));
 app.use("/api/logistics", requireParticipantMiddleware, logisticsRouter);
 
@@ -118,11 +116,6 @@ app.get("/api/cop/:participantId", (req, res) => {
   }
 });
 
-/**
- * Raw operational writes are a development-only integration boundary until a
- * production identity gateway exists. The payload still has to name the same
- * authenticated participant as the request context.
- */
 app.post("/api/objects", (req, res) => {
   const authenticatedId = requireParticipant(req, res);
   if (!authenticatedId) return;
@@ -141,27 +134,16 @@ app.post("/api/alerts", (req, res) => {
   return res.status(202).json(runtime.publishAlert(req.body));
 });
 
-/**
- * AI/decision support accepts only a participant context and a question.
- * It derives the input from the participant's authorized Dynamic COP and
- * never receives arbitrary React state.
- */
 app.post("/api/advisory", (req, res) => {
   const authenticatedId = requireParticipant(req, res);
   if (!authenticatedId) return;
   try {
     if (req.body?.participantId !== authenticatedId) return res.status(403).json({ error: "Advisory participant does not match the authenticated identity." });
     const question = typeof req.body?.userQuery === "string" ? req.body.userQuery.trim() : "";
-
     const context = resolveParticipantOperationalContext(authenticatedId);
     const cop = buildDynamicCopFromFabric(context);
     const advisoryContext = buildStormFireAdvisoryContext(cop);
-
-    return res.json({
-      response: generateBoundedAdvisory(advisoryContext, question),
-      participantId: authenticatedId,
-      context: advisoryContext,
-    });
+    return res.json({ response: generateBoundedAdvisory(advisoryContext, question), participantId: authenticatedId, context: advisoryContext });
   } catch (error) {
     return res.status(403).json({ error: error instanceof Error ? error.message : "Authorized decision-support context unavailable." });
   }
