@@ -78,7 +78,7 @@ export function LogisticsWorkspace() {
       <div>
         <div style={{ fontSize: 12, letterSpacing: 2, opacity: .65 }}>STORM FIRE SERVICE FABRIC</div>
         <h1 style={{ margin: "4px 0", fontSize: 24 }}>Logistics Workspace</h1>
-        <div style={{ opacity: .65, fontSize: 13 }}>Participant-scoped sustainment environment</div>
+        <div style={{ opacity: .65, fontSize: 13 }}>Authenticated participant sustainment environment</div>
       </div>
       <button onClick={() => void load()} disabled={loading}>{loading ? "Refreshing…" : "Refresh"}</button>
     </header>
