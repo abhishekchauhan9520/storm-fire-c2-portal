@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { stormFireAuthorization } from "../../domain/authorizationPolicy";
-import { logisticsService } from "./logisticsContainer";
+import { logisticsLifecycle, logisticsService } from "./logisticsContainer";
 import type { LogisticsRequestStatus } from "./logisticsService";
 
 export const logisticsRouter = Router();
@@ -46,32 +46,37 @@ logisticsRouter.get("/requests", (req, res) => {
   return res.json({ data: logisticsService.listRequests(rawStatus as LogisticsRequestStatus | undefined) });
 });
 
-logisticsRouter.post("/resources", (req, res) => {
+logisticsRouter.post("/resources", async (req, res) => {
   if (!requireCapability(res, "ResourceStatus")) return;
-  try { return res.status(201).json({ data: logisticsService.registerResource(req.body) }); }
-  catch (error) { return res.status(400).json({ error: error instanceof Error ? error.message : "Invalid resource." }); }
+  try {
+    const result = await logisticsLifecycle.registerResource(req.body);
+    return res.status(201).json({ data: result.data, eventId: result.eventId, eventPublished: result.published });
+  } catch (error) { return res.status(400).json({ error: error instanceof Error ? error.message : "Invalid resource." }); }
 });
 
-logisticsRouter.post("/requests", (req, res) => {
+logisticsRouter.post("/requests", async (req, res) => {
   const authenticatedId = requireCapability(res, "LogisticsRequest");
   if (!authenticatedId) return;
   if (req.body?.requesterParticipantId !== authenticatedId) {
     return res.status(403).json({ error: "Logistics request requester does not match the authenticated participant." });
   }
-  try { return res.status(201).json({ data: logisticsService.createRequest(req.body) }); }
-  catch (error) { return res.status(400).json({ error: error instanceof Error ? error.message : "Invalid logistics request." }); }
+  try {
+    const result = await logisticsLifecycle.createRequest(req.body);
+    return res.status(201).json({ data: result.data, eventId: result.eventId, eventPublished: result.published });
+  } catch (error) { return res.status(400).json({ error: error instanceof Error ? error.message : "Invalid logistics request." }); }
 });
 
-logisticsRouter.patch("/requests/:id/status", (req, res) => {
+logisticsRouter.patch("/requests/:id/status", async (req, res) => {
   const authenticatedId = requireCapability(res, "LogisticsRequest");
   if (!authenticatedId) return;
 
   try {
     const status = req.body?.status;
     if (!validStatuses.has(status)) return res.status(400).json({ error: "Invalid logistics request status." });
-    const existing = logisticsService.listRequests().find((request) => request.id === req.params.id);
+    const existing = logisticsService.getRequest(req.params.id);
     if (!existing) return res.status(404).json({ error: `Logistics request ${req.params.id} was not found.` });
     if (existing.requesterParticipantId !== authenticatedId) return res.status(403).json({ error: "Only the authenticated requester may change this logistics request status." });
-    return res.json({ data: logisticsService.updateRequestStatus(req.params.id, status) });
+    const result = await logisticsLifecycle.updateRequestStatus(req.params.id, status, authenticatedId);
+    return res.json({ data: result.data, eventId: result.eventId, eventPublished: result.published });
   } catch (error) { return res.status(400).json({ error: error instanceof Error ? error.message : "Invalid request status." }); }
 });
