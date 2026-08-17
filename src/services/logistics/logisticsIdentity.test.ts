@@ -1,9 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-
-export function bindAuthenticatedRequester<T extends Record<string, unknown>>(body: T, participantId: string): T & { requesterParticipantId: string } {
-  return { ...body, requesterParticipantId: participantId };
-}
+import { bindAuthenticatedRequester } from "./logisticsIdentity";
 
 test("authenticated participant is the authoritative Logistics requester", () => {
   const request = bindAuthenticatedRequester({
