@@ -1,4 +1,5 @@
-import type { OrganizationNode, Participant, Service } from "../contracts/stormFireContracts";
+import type { OrganizationNode, Participant, Policy, Service } from "../contracts/stormFireContracts";
+import { stormFireAuthorization } from "./authorizationPolicy";
 import { stormFireOrganizationGraph } from "./organizationGraph";
 import { stormFireParticipantContexts } from "./participantContext";
 import { stormFireParticipants } from "../service-fabric/participantModel";
@@ -18,9 +19,14 @@ function ensureParticipant(participant: Participant): void {
   if (!stormFireParticipants.get(participant.id)) stormFireParticipants.register(participant);
 }
 
+function ensurePolicy(policy: Policy): void {
+  if (!stormFireAuthorization.list().some((existing) => existing.id === policy.id)) stormFireAuthorization.register(policy);
+}
+
 /**
  * Reference scenario proving that different participant contexts can project
- * different COPs from the same shared information environment.
+ * different COPs from the same shared information environment under the
+ * canonical policy engine.
  */
 export function runDynamicCopScenario() {
   ensureService({ id: "logistics", name: "Logistics", version: "scenario", description: "Scenario logistics service", capabilities: [{ id: "logistics:view", name: "Logistics view" }], informationTypesProduced: ["LOGISTICS_READINESS_CHANGED"], informationTypesConsumed: ["LOGISTICS_READINESS_CHANGED"], displaySurfaceIds: ["logistics"], dependencyServiceIds: [], ownerParticipantId: "system", status: "ACTIVE" });
@@ -36,6 +42,10 @@ export function runDynamicCopScenario() {
 
   stormFireParticipantContexts.assign({ participantId: "company-cdr", organizationIds: ["company-alpha"], roleIds: ["company-commander"], serviceIds: ["logistics", "uav"], geographicScopeIds: ["sector-20km"], informationRelationshipIds: ["brigade-logistics"], workspaceIds: [], classification: "CONTROLLED" });
   stormFireParticipantContexts.assign({ participantId: "brigade-cdr", organizationIds: ["brigade-alpha"], roleIds: ["brigade-commander"], serviceIds: ["logistics", "uav", "ew", "air-defence"], geographicScopeIds: ["sector-20km", "sector-80km"], informationRelationshipIds: ["brigade-logistics", "brigade-ew", "brigade-air-defence"], workspaceIds: [], classification: "CONTROLLED" });
+
+  ensurePolicy({ id: "scenario-company-logistics", version: 1, effect: "ALLOW", participantIds: ["company-cdr"], serviceIds: ["logistics"], organizationIds: ["company-alpha"], roleIds: ["company-commander"], relationshipIds: ["brigade-logistics"], informationTypes: ["LOGISTICS_READINESS_CHANGED"], geographicScopeIds: ["sector-20km"], classifications: ["CONTROLLED"], priority: 100, enabled: true });
+  ensurePolicy({ id: "scenario-brigade-logistics", version: 1, effect: "ALLOW", participantIds: ["brigade-cdr"], serviceIds: ["logistics"], organizationIds: ["company-alpha"], roleIds: ["brigade-commander"], relationshipIds: ["brigade-logistics"], informationTypes: ["LOGISTICS_READINESS_CHANGED"], geographicScopeIds: ["sector-20km"], classifications: ["CONTROLLED"], priority: 100, enabled: true });
+  ensurePolicy({ id: "scenario-brigade-ew", version: 1, effect: "ALLOW", participantIds: ["brigade-cdr"], serviceIds: ["ew"], organizationIds: ["brigade-alpha"], roleIds: ["brigade-commander"], relationshipIds: ["brigade-ew"], informationTypes: ["EW_EVENT"], geographicScopeIds: ["sector-80km"], classifications: ["CONTROLLED"], priority: 100, enabled: true });
 
   const company = resolveParticipantOperationalContext("company-cdr");
   const brigade = resolveParticipantOperationalContext("brigade-cdr");
