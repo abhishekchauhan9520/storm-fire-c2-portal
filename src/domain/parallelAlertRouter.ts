@@ -1,5 +1,5 @@
 import { InformationFabric, StormFireInformationEnvelope } from "./informationFabric";
-import { InformationRelationshipRegistry } from "./informationRelationships";
+import { InformationRelationshipEngine, stormFireInformationRelationships } from "./informationRelationshipEngine";
 
 export interface AlertRecipient {
   participantId: string;
@@ -12,9 +12,9 @@ export interface ParallelAlertDispatch {
   recipients: AlertRecipient[];
 }
 
-/** Routes one alert to multiple authorized participants in parallel. Authorization is relationship-aware. */
+/** Routes one alert to multiple authorized participants in parallel. */
 export class ParallelAlertRouter {
-  constructor(private readonly fabric: InformationFabric, private readonly relationships: InformationRelationshipRegistry) {}
+  constructor(private readonly fabric: InformationFabric, private readonly relationships: InformationRelationshipEngine) {}
 
   dispatch<T>(alert: StormFireInformationEnvelope<T>, recipients: string[]): ParallelAlertDispatch {
     const uniqueRecipients = [...new Set(recipients)].filter(Boolean);
@@ -22,13 +22,12 @@ export class ParallelAlertRouter {
     const delivered: AlertRecipient[] = [];
 
     for (const participantId of uniqueRecipients) {
-      if (alert.producerParticipantId && !this.relationships.allows(alert.producerParticipantId, participantId, alert.type)) continue;
+      if (alert.producerParticipantId && !this.relationships.canShare(alert.producerParticipantId, participantId, alert.type)) continue;
       delivered.push({ participantId, deliveredAt });
     }
 
-    const dispatch: ParallelAlertDispatch = { alert, recipients: delivered };
-    return dispatch;
+    return { alert, recipients: delivered };
   }
 }
 
-export const createParallelAlertRouter = (fabric: InformationFabric, relationships: InformationRelationshipRegistry) => new ParallelAlertRouter(fabric, relationships);
+export const createParallelAlertRouter = (fabric: InformationFabric, relationships = stormFireInformationRelationships) => new ParallelAlertRouter(fabric, relationships);
