@@ -11,6 +11,8 @@ import { logisticsRouter } from "./src/services/logistics/logisticsApi";
 import { logisticsRepositoryReady, logisticsService as stormFireLogisticsService } from "./src/services/logistics/logisticsContainer";
 import { bootstrapStormFireDevelopmentScenario } from "./src/platform/stormFireBootstrap";
 import { stormFireServiceFabric } from "./src/service-fabric/serviceFabric";
+import { stormFireEventSpine } from "./src/platform/event-spine/eventSpine";
+import { stormFireParticipantEventStream, type ParticipantStreamEvent } from "./src/platform/realtime/participantEventStream";
 import type { CanonicalOperationalObject } from "./src/types";
 
 dotenv.config({ path: ".env.local" });
@@ -21,6 +23,7 @@ const PORT = Number(process.env.PORT || 3000);
 const runtime = createStormFireRuntime();
 const isProduction = process.env.NODE_ENV === "production";
 const developmentParticipantId = process.env.STORM_FIRE_DEV_PARTICIPANT_ID || "operator-command";
+const realtimeConnections = new Set<express.Response>();
 app.use(express.json({ limit: "1mb" }));
 
 if (!isProduction || process.env.STORM_FIRE_BOOTSTRAP_SCENARIO === "true") {
@@ -61,6 +64,24 @@ function requireParticipantMiddleware(req: Request, res: express.Response, next:
   requireParticipant(req, res, next);
 }
 
+function publishParticipantRealtimeEvent(event: ParticipantStreamEvent): void {
+  stormFireParticipantEventStream.publish(event);
+}
+
+for (const eventType of ["LogisticsResourceRegistered", "LogisticsRequestCreated", "LogisticsRequestStatusChanged", "LogisticsRequestStatusReaffirmed"]) {
+  stormFireEventSpine.subscribe(eventType, (event) => {
+    const participantId = event.metadata.producer;
+    if (!participantId) return;
+    publishParticipantRealtimeEvent({
+      type: event.metadata.eventType,
+      eventId: event.metadata.eventId,
+      participantId,
+      correlationId: event.metadata.correlationId,
+      payload: event.payload,
+    });
+  });
+}
+
 app.get("/api/health", (_req, res) => {
   const base = { status: "ok", architecture: "storm-fire-information-centric", runtime: "operational", persistence: "adapter-boundary" };
   if (isProduction) return res.json(base);
@@ -73,12 +94,41 @@ app.get("/api/health", (_req, res) => {
       events: runtime.state.events.length,
       alerts: runtime.state.alerts.length,
       logisticsRequests: stormFireLogisticsService.listRequests().length,
+      realtimeSubscribers: stormFireParticipantEventStream.listenerCount(),
     },
   });
 });
 
 app.get("/api/services", (_req, res) => res.json(stormFireServiceFabric.list()));
 app.use("/api/logistics", requireParticipantMiddleware, logisticsRouter);
+
+app.get("/api/events/stream", (req, res) => {
+  const participantId = requireParticipant(req, res);
+  if (!participantId) return;
+
+  res.status(200);
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-store, max-age=0, must-revalidate");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders();
+  res.write(`event: stream.ready\ndata: ${JSON.stringify({ participantId })}\n\n`);
+  realtimeConnections.add(res);
+
+  const unsubscribe = stormFireParticipantEventStream.subscribe(participantId, (event) => {
+    if (res.writableEnded) return;
+    res.write(`event: cop.invalidate\ndata: ${JSON.stringify(event)}\n\n`);
+  });
+  const heartbeat = setInterval(() => {
+    if (!res.writableEnded) res.write(": heartbeat\n\n");
+  }, 15000);
+
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    unsubscribe();
+    realtimeConnections.delete(res);
+    res.end();
+  });
+});
 
 app.get("/api/participant-context/:participantId", (req, res) => {
   const authenticatedId = requireParticipant(req, res);
