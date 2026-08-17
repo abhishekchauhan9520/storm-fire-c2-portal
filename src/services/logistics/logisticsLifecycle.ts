@@ -18,7 +18,7 @@ export class LogisticsLifecycle {
 
   async registerResource(resource: LogisticsResource): Promise<LogisticsLifecycleResult<LogisticsResource>> {
     const data = this.service.registerResource(resource);
-    const event = this.event("LogisticsResourceRegistered", data.id, resource.ownerParticipantId, data);
+    const event = this.event("LogisticsResourceRegistered", data.id, "logistics-service", data);
     return { data, eventId: event.metadata.eventId, published: await stormFireEventSpine.publish(event) };
   }
 
