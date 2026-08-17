@@ -17,6 +17,7 @@ export class LogisticsService {
 
   getResource(id: string): LogisticsResource | undefined { return this.repository.getResource(id); }
   listResources(): LogisticsResource[] { return this.repository.listResources(); }
+  getRequest(id: string): LogisticsRequest | undefined { return this.repository.getRequest(id); }
 
   createRequest(input: Omit<LogisticsRequest, "status" | "createdAt" | "updatedAt">): LogisticsRequest {
     if (!this.repository.getResource(input.resourceId)) throw new Error(`Resource ${input.resourceId} was not found.`);
