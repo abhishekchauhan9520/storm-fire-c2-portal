@@ -1,4 +1,5 @@
-import { stormFireInformationAccess, stormFireGeographicScopes, type StormFireScopePoint } from "./geographicScopeEngine";
+import { stormFireInformationAccess } from "./informationAccessResolver";
+import { stormFireGeographicScopes, type StormFireScopePoint } from "./geographicScopeEngine";
 import { stormFireAuthorization } from "./authorizationPolicy";
 import type { InformationClassification } from "../contracts/stormFireContracts";
 import type { StormFireResolvedOperationalContext } from "./participantOperationalContext";
