@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { stormFireAuthorization } from "../../domain/authorizationPolicy";
 import { logisticsLifecycle, logisticsService } from "./logisticsContainer";
+import { bindAuthenticatedRequester } from "./logisticsIdentity";
 import type { LogisticsRequestStatus } from "./logisticsService";
 
 export const logisticsRouter = Router();
@@ -59,10 +60,7 @@ logisticsRouter.post("/requests", async (req, res) => {
   if (!authenticatedId) return;
 
   try {
-    const request = {
-      ...req.body,
-      requesterParticipantId: authenticatedId,
-    };
+    const request = bindAuthenticatedRequester(req.body, authenticatedId);
     if (typeof request.id !== "string" || !request.id) return res.status(400).json({ error: "Logistics request id is required." });
     if (req.body?.requesterParticipantId && req.body.requesterParticipantId !== authenticatedId) {
       return res.status(403).json({ error: "Logistics request requester does not match the authenticated participant." });
