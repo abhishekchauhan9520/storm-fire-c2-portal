@@ -8,6 +8,7 @@ import { buildDynamicCopFromFabric } from "./src/domain/dynamicCopFromFabric";
 import { resolveParticipantOperationalContext } from "./src/domain/participantOperationalContext";
 import { logisticsRouter } from "./src/services/logistics/logisticsApi";
 import { stormFireLogisticsService } from "./src/services/logistics/logisticsService";
+import { bootstrapStormFireDevelopmentScenario } from "./src/platform/stormFireBootstrap";
 import type { CanonicalOperationalObject } from "./src/types";
 
 dotenv.config({ path: ".env.local" });
@@ -17,6 +18,10 @@ const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const runtime = createStormFireRuntime();
 app.use(express.json({ limit: "1mb" }));
+
+if (process.env.NODE_ENV !== "production" || process.env.STORM_FIRE_BOOTSTRAP_SCENARIO === "true") {
+  bootstrapStormFireDevelopmentScenario();
+}
 
 app.get("/api/health", (_req, res) => res.json({ status: "ok", architecture: "storm-fire-information-centric", runtime: "operational", persistence: "adapter-boundary", counts: { participants: runtime.state.participants.length, objects: runtime.state.objects.length, events: runtime.state.events.length, alerts: runtime.state.alerts.length, logisticsRequests: stormFireLogisticsService.listRequests().length } }));
 app.get("/api/runtime/state", (_req, res) => res.json(runtime.state));
