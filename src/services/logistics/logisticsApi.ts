@@ -1,40 +1,33 @@
 import { Router } from "express";
-import { stormFireLogisticsService } from "./logisticsService";
+import { logisticsService } from "./logisticsContainer";
+import type { LogisticsRequestStatus } from "./logisticsService";
 
 export const logisticsRouter = Router();
 
-logisticsRouter.get("/resources", (_req, res) => {
-  res.json({ data: stormFireLogisticsService.listResources() });
-});
+const validStatuses = new Set<LogisticsRequestStatus>(["OPEN", "PRIORITIZED", "IN_PROGRESS", "FULFILLED", "CANCELLED"]);
+
+logisticsRouter.get("/resources", (_req, res) => res.json({ data: logisticsService.listResources() }));
 
 logisticsRouter.get("/requests", (req, res) => {
-  const status = typeof req.query.status === "string" ? req.query.status as any : undefined;
-  res.json({ data: stormFireLogisticsService.listRequests(status) });
+  const rawStatus = typeof req.query.status === "string" ? req.query.status : undefined;
+  if (rawStatus && !validStatuses.has(rawStatus as LogisticsRequestStatus)) return res.status(400).json({ error: "Invalid logistics request status." });
+  return res.json({ data: logisticsService.listRequests(rawStatus as LogisticsRequestStatus | undefined) });
 });
 
 logisticsRouter.post("/resources", (req, res) => {
-  try {
-    const resource = stormFireLogisticsService.registerResource(req.body);
-    res.status(201).json({ data: resource });
-  } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Invalid resource." });
-  }
+  try { return res.status(201).json({ data: logisticsService.registerResource(req.body) }); }
+  catch (error) { return res.status(400).json({ error: error instanceof Error ? error.message : "Invalid resource." }); }
 });
 
 logisticsRouter.post("/requests", (req, res) => {
-  try {
-    const request = stormFireLogisticsService.createRequest(req.body);
-    res.status(201).json({ data: request });
-  } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Invalid logistics request." });
-  }
+  try { return res.status(201).json({ data: logisticsService.createRequest(req.body) }); }
+  catch (error) { return res.status(400).json({ error: error instanceof Error ? error.message : "Invalid logistics request." }); }
 });
 
 logisticsRouter.patch("/requests/:id/status", (req, res) => {
   try {
-    const request = stormFireLogisticsService.updateRequestStatus(req.params.id, req.body?.status);
-    res.json({ data: request });
-  } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Invalid request status." });
-  }
+    const status = req.body?.status;
+    if (!validStatuses.has(status)) return res.status(400).json({ error: "Invalid logistics request status." });
+    return res.json({ data: logisticsService.updateRequestStatus(req.params.id, status) });
+  } catch (error) { return res.status(400).json({ error: error instanceof Error ? error.message : "Invalid request status." }); }
 });
