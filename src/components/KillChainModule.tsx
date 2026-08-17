@@ -1,5 +1,6 @@
 import React from "react";
-import type { TacticalTrack, TacticalLog, KillChainState } from "../types";
+import { KillChainState } from "../types";
+import type { TacticalTrack, TacticalLog } from "../types";
 import { CheckSquare, Compass, Database, Eye, FileSearch, GitBranch, ShieldAlert } from "lucide-react";
 
 interface KillChainModuleProps {
