@@ -1,4 +1,4 @@
-import express from "express";
+import express, { type Request } from "express";
 import path from "path";
 import dotenv from "dotenv";
 import { fileURLToPath } from "url";
@@ -19,24 +19,69 @@ dotenv.config();
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const runtime = createStormFireRuntime();
+const isProduction = process.env.NODE_ENV === "production";
+const developmentParticipantId = process.env.STORM_FIRE_DEV_PARTICIPANT_ID || "operator-command";
 app.use(express.json({ limit: "1mb" }));
 
-if (process.env.NODE_ENV !== "production" || process.env.STORM_FIRE_BOOTSTRAP_SCENARIO === "true") {
+if (!isProduction || process.env.STORM_FIRE_BOOTSTRAP_SCENARIO === "true") {
   bootstrapStormFireDevelopmentScenario();
 }
 
-app.get("/api/health", (_req, res) => res.json({ status: "ok", architecture: "storm-fire-information-centric", runtime: "operational", persistence: "adapter-boundary", counts: { participants: runtime.state.participants.length, objects: runtime.state.objects.length, events: runtime.state.events.length, alerts: runtime.state.alerts.length, logisticsRequests: stormFireLogisticsService.listRequests().length } }));
-app.get("/api/runtime/state", (_req, res) => res.json(runtime.state));
-app.get("/api/participants", (_req, res) => res.json(runtime.state.participants));
-app.get("/api/objects", (_req, res) => res.json(runtime.state.objects));
-app.get("/api/events", (_req, res) => res.json(runtime.state.events));
-app.get("/api/alerts", (_req, res) => res.json(runtime.state.alerts));
+/**
+ * Authentication is deliberately a separate boundary from authorization.
+ * The current repository contains no production identity provider, so
+ * operational participant-scoped endpoints remain disabled in production
+ * until an authenticated identity is supplied by an upstream gateway.
+ */
+function authenticatedParticipantId(req: Request): string | null {
+  if (isProduction) return null;
+  const claimed = req.header("x-storm-fire-participant-id");
+  const participantId = claimed || developmentParticipantId;
+  return participantId || null;
+}
+
+function requireParticipant(req: Request, res: express.Response): string | null {
+  const participantId = authenticatedParticipantId(req);
+  if (!participantId) {
+    res.status(401).json({ error: "Authenticated participant identity is required for operational data access." });
+    return null;
+  }
+  try {
+    resolveParticipantOperationalContext(participantId);
+  } catch (error) {
+    res.status(403).json({ error: error instanceof Error ? error.message : "Participant context is unavailable." });
+    return null;
+  }
+  return participantId;
+}
+
+app.get("/api/health", (_req, res) => {
+  const base = { status: "ok", architecture: "storm-fire-information-centric", runtime: "operational", persistence: "adapter-boundary" };
+  if (isProduction) return res.json(base);
+  return res.json({
+    ...base,
+    environment: "development",
+    counts: {
+      participants: runtime.state.participants.length,
+      objects: runtime.state.objects.length,
+      events: runtime.state.events.length,
+      alerts: runtime.state.alerts.length,
+      logisticsRequests: stormFireLogisticsService.listRequests().length,
+    },
+  });
+});
+
+// Canonical public metadata. Operational objects/events/alerts are exposed only
+// through participant-authorized projections, not as raw runtime state dumps.
 app.get("/api/services", (_req, res) => res.json(stormFireServiceFabric.list()));
 app.use("/api/logistics", logisticsRouter);
 
 app.get("/api/participant-context/:participantId", (req, res) => {
+  const authenticatedId = requireParticipant(req, res);
+  if (!authenticatedId) return;
+  if (authenticatedId !== req.params.participantId) return res.status(403).json({ error: "Participant context does not match the authenticated identity." });
   try {
-    const context = resolveParticipantOperationalContext(req.params.participantId);
+    const context = resolveParticipantOperationalContext(authenticatedId);
     return res.json({ data: context });
   } catch (error) {
     return res.status(404).json({ error: error instanceof Error ? error.message : "Participant context not found." });
@@ -44,25 +89,48 @@ app.get("/api/participant-context/:participantId", (req, res) => {
 });
 
 app.post("/api/access/decide", (req, res) => {
-  try { return res.json({ data: stormFireAuthorization.decide(req.body) }); }
-  catch (error) { return res.status(400).json({ error: error instanceof Error ? error.message : "Invalid authorization request." }); }
+  const authenticatedId = requireParticipant(req, res);
+  if (!authenticatedId) return;
+  if (req.body?.participantId !== authenticatedId) return res.status(403).json({ error: "Authorization subject does not match the authenticated identity." });
+  try {
+    return res.json({ data: stormFireAuthorization.decide(req.body) });
+  } catch (error) {
+    return res.status(400).json({ error: error instanceof Error ? error.message : "Invalid authorization request." });
+  }
 });
 
 app.get("/api/cop/:participantId", (req, res) => {
+  const authenticatedId = requireParticipant(req, res);
+  if (!authenticatedId) return;
+  if (authenticatedId !== req.params.participantId) return res.status(403).json({ error: "COP participant does not match the authenticated identity." });
   try {
-    const operationalContext = resolveParticipantOperationalContext(req.params.participantId);
+    const operationalContext = resolveParticipantOperationalContext(authenticatedId);
+    res.setHeader("Cache-Control", "no-store, max-age=0");
     return res.json({ data: buildDynamicCopFromFabric(operationalContext) });
   } catch (error) {
     return res.status(404).json({ error: error instanceof Error ? error.message : "Canonical participant context is unavailable." });
   }
 });
 
+/**
+ * Raw operational writes are a development-only integration boundary until a
+ * production identity gateway exists. The payload still has to name the same
+ * authenticated participant as the request context.
+ */
 app.post("/api/objects", (req, res) => {
+  const authenticatedId = requireParticipant(req, res);
+  if (!authenticatedId) return;
   const object = req.body as CanonicalOperationalObject;
+  if (object?.sourceParticipantId !== authenticatedId) return res.status(403).json({ error: "Object source participant does not match the authenticated identity." });
   if (!object?.id || !object?.kind || !object?.sourceParticipantId || !object?.timestamp) return res.status(400).json({ error: "Canonical object requires id, kind, timestamp and sourceParticipantId." });
   return res.status(202).json(runtime.ingestObject(object));
 });
+
 app.post("/api/alerts", (req, res) => {
+  const authenticatedId = requireParticipant(req, res);
+  if (!authenticatedId) return;
+  const recipientIds = Array.isArray(req.body?.recipients) ? req.body.recipients : [];
+  if (!recipientIds.includes(authenticatedId)) return res.status(403).json({ error: "Alert recipient list must include the authenticated participant." });
   if (!req.body?.id || !req.body?.objectId) return res.status(400).json({ error: "Alert requires id and objectId." });
   return res.status(202).json(runtime.publishAlert(req.body));
 });
@@ -73,18 +141,19 @@ app.post("/api/alerts", (req, res) => {
  * never receives arbitrary React state.
  */
 app.post("/api/advisory", (req, res) => {
+  const authenticatedId = requireParticipant(req, res);
+  if (!authenticatedId) return;
   try {
-    const participantId = typeof req.body?.participantId === "string" ? req.body.participantId : "";
+    if (req.body?.participantId !== authenticatedId) return res.status(403).json({ error: "Advisory participant does not match the authenticated identity." });
     const question = typeof req.body?.userQuery === "string" ? req.body.userQuery.trim() : "";
-    if (!participantId) return res.status(400).json({ error: "participantId is required." });
 
-    const context = resolveParticipantOperationalContext(participantId);
+    const context = resolveParticipantOperationalContext(authenticatedId);
     const cop = buildDynamicCopFromFabric(context);
     const advisoryContext = buildStormFireAdvisoryContext(cop);
 
     return res.json({
       response: generateBoundedAdvisory(advisoryContext, question),
-      participantId,
+      participantId: authenticatedId,
       context: advisoryContext,
     });
   } catch (error) {
@@ -95,7 +164,7 @@ app.post("/api/advisory", (req, res) => {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
+  if (!isProduction) {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
     app.use(vite.middlewares);
