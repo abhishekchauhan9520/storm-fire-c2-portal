@@ -12,7 +12,8 @@ import { logisticsRepositoryReady, logisticsService as stormFireLogisticsService
 import { bootstrapStormFireDevelopmentScenario } from "./src/platform/stormFireBootstrap";
 import { stormFireServiceFabric } from "./src/service-fabric/serviceFabric";
 import { stormFireEventSpine } from "./src/platform/event-spine/eventSpine";
-import { stormFireParticipantEventStream, type ParticipantStreamEvent } from "./src/platform/realtime/participantEventStream";
+import { stormFireParticipantEventStream } from "./src/platform/realtime/participantEventStream";
+import { dispatchParticipantEvent } from "./src/platform/realtime/participantEventDispatch";
 import type { CanonicalOperationalObject } from "./src/types";
 
 dotenv.config({ path: ".env.local" });
@@ -23,7 +24,6 @@ const PORT = Number(process.env.PORT || 3000);
 const runtime = createStormFireRuntime();
 const isProduction = process.env.NODE_ENV === "production";
 const developmentParticipantId = process.env.STORM_FIRE_DEV_PARTICIPANT_ID || "operator-command";
-const realtimeConnections = new Set<express.Response>();
 app.use(express.json({ limit: "1mb" }));
 
 if (!isProduction || process.env.STORM_FIRE_BOOTSTRAP_SCENARIO === "true") {
@@ -64,21 +64,9 @@ function requireParticipantMiddleware(req: Request, res: express.Response, next:
   requireParticipant(req, res, next);
 }
 
-function publishParticipantRealtimeEvent(event: ParticipantStreamEvent): void {
-  stormFireParticipantEventStream.publish(event);
-}
-
 for (const eventType of ["LogisticsResourceRegistered", "LogisticsRequestCreated", "LogisticsRequestStatusChanged", "LogisticsRequestStatusReaffirmed"]) {
   stormFireEventSpine.subscribe(eventType, (event) => {
-    const participantId = event.metadata.producer;
-    if (!participantId) return;
-    publishParticipantRealtimeEvent({
-      type: event.metadata.eventType,
-      eventId: event.metadata.eventId,
-      participantId,
-      correlationId: event.metadata.correlationId,
-      payload: event.payload,
-    });
+    dispatchParticipantEvent(event);
   });
 }
 
@@ -112,7 +100,6 @@ app.get("/api/events/stream", (req, res) => {
   res.setHeader("Connection", "keep-alive");
   res.flushHeaders();
   res.write(`event: stream.ready\ndata: ${JSON.stringify({ participantId })}\n\n`);
-  realtimeConnections.add(res);
 
   const unsubscribe = stormFireParticipantEventStream.subscribe(participantId, (event) => {
     if (res.writableEnded) return;
@@ -125,7 +112,6 @@ app.get("/api/events/stream", (req, res) => {
   req.on("close", () => {
     clearInterval(heartbeat);
     unsubscribe();
-    realtimeConnections.delete(res);
     res.end();
   });
 });
@@ -210,7 +196,7 @@ async function startServer() {
   } else {
     const distPath = path.join(__dirname, "dist");
     app.use(express.static(distPath));
-    app.get("*", (_req, res) => res.sendFile(path.join(distPath, "index.html")));
+    app.get("*", (_req, res) => res.sendFile(path.join(distPath, "index.html"));
   }
   app.listen(PORT, "0.0.0.0", () => console.log(`[STORM-FIRE] Information runtime operational on port ${PORT}`));
 }
