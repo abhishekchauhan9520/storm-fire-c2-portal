@@ -26,14 +26,26 @@ export interface DynamicCopResponse<T = unknown> {
 }
 
 export async function fetchDynamicCop(participantId: string, signal?: AbortSignal): Promise<DynamicCopResponse> {
-  const response = await fetch(`/api/cop/${encodeURIComponent(participantId)}`, { signal });
+  if (!participantId.trim()) throw new Error("Dynamic COP participantId is required.");
+
+  const response = await fetch(`/api/cop/${encodeURIComponent(participantId)}`, {
+    signal,
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+  });
   if (!response.ok) {
     const body = await response.text();
     throw new Error(body || `Dynamic COP request failed with HTTP ${response.status}.`);
   }
-  const body = await response.json() as { data?: DynamicCopResponse };
-  if (!body.data) throw new Error("Dynamic COP response did not contain data.");
-  return body.data;
+
+  const body = await response.json() as { data?: unknown };
+  if (!body.data || typeof body.data !== "object") throw new Error("Dynamic COP response did not contain data.");
+
+  const data = body.data as Partial<DynamicCopResponse>;
+  if (data.participantId !== participantId) throw new Error("Dynamic COP response participant context mismatch.");
+  if (!Array.isArray(data.information)) throw new Error("Dynamic COP response information projection is invalid.");
+
+  return data as DynamicCopResponse;
 }
 
 function isFaction(value: unknown): value is TacticalTrack["faction"] {
