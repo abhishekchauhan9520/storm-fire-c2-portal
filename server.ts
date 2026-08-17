@@ -40,10 +40,11 @@ function authenticatedParticipantId(req: Request): string | null {
   return participantId || null;
 }
 
-function requireParticipant(req: Request, res: express.Response): string | null {
+function requireParticipant(req: Request, res: express.Response, next?: express.NextFunction): string | null {
   const participantId = authenticatedParticipantId(req);
   if (!participantId) {
-    res.status(401).json({ error: "Authenticated participant identity is required for operational data access." });
+    if (next) res.status(401).json({ error: "Authenticated participant identity is required for operational data access." });
+    else res.status(401).json({ error: "Authenticated participant identity is required for operational data access." });
     return null;
   }
   try {
@@ -52,7 +53,12 @@ function requireParticipant(req: Request, res: express.Response): string | null 
     res.status(403).json({ error: error instanceof Error ? error.message : "Participant context is unavailable." });
     return null;
   }
+  if (next) next();
   return participantId;
+}
+
+function requireParticipantMiddleware(req: Request, res: express.Response, next: express.NextFunction): void {
+  requireParticipant(req, res, next);
 }
 
 app.get("/api/health", (_req, res) => {
@@ -74,7 +80,7 @@ app.get("/api/health", (_req, res) => {
 // Canonical public metadata. Operational objects/events/alerts are exposed only
 // through participant-authorized projections, not as raw runtime state dumps.
 app.get("/api/services", (_req, res) => res.json(stormFireServiceFabric.list()));
-app.use("/api/logistics", logisticsRouter);
+app.use("/api/logistics", requireParticipantMiddleware, logisticsRouter);
 
 app.get("/api/participant-context/:participantId", (req, res) => {
   const authenticatedId = requireParticipant(req, res);
