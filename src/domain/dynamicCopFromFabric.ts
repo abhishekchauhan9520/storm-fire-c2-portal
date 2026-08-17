@@ -4,6 +4,17 @@ import { resolveStormFireDynamicCop, type StormFireOperationalInformation, type 
 
 export interface StormFireDynamicCopSubscription { id: string; context: StormFireResolvedOperationalContext; informationTypes: string[]; onUpdate: (cop: StormFireDynamicCop) => void; }
 
+function tagValue(tags: string[] | undefined, prefix: string): string | undefined {
+  return tags?.find((tag) => tag.startsWith(prefix))?.slice(prefix.length);
+}
+
+function pointFromTags(tags: string[] | undefined) {
+  const latitude = Number(tagValue(tags, "lat:"));
+  const longitude = Number(tagValue(tags, "lon:"));
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return undefined;
+  return { latitude, longitude };
+}
+
 export function buildDynamicCopFromFabric<T>(context: StormFireResolvedOperationalContext, information?: StormFireInformationEnvelope<T>[], generatedAt = new Date().toISOString()): StormFireDynamicCop<T> {
   const source = information ?? stormFireInformationFabric.historyFor() as StormFireInformationEnvelope<T>[];
   const operationalInformation: StormFireOperationalInformation<T>[] = source.map((message) => ({
@@ -11,7 +22,9 @@ export function buildDynamicCopFromFabric<T>(context: StormFireResolvedOperation
     occurredAt: message.occurredAt,
     informationType: message.type,
     organizationId: message.producerParticipantId ?? message.provenance.sourceId,
+    producerParticipantId: message.producerParticipantId,
     geographicScopeId: message.tags?.find((tag) => tag.startsWith("geo:"))?.slice(4),
+    informationPoint: pointFromTags(message.tags),
     relationshipId: message.tags?.find((tag) => tag.startsWith("rel:"))?.slice(4),
     classification: message.classification,
     payload: message.payload as T,
