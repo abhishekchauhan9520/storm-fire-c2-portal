@@ -1,4 +1,6 @@
 import type { StormFireServiceManifest } from "./serviceRegistry";
+import { registerStormFireService, fromCanonicalService, getCanonicalStormFireService } from "./serviceRegistry";
+import { stormFireServiceFabric } from "./serviceFabric";
 import { stormFirePolicyEngine, type ServiceIdentity } from "./servicePolicy";
 import { validateServiceCompatibility, type CompatibilityResult } from "./serviceCompatibility";
 import { stormFireServiceObservability } from "./serviceObservability";
@@ -37,8 +39,9 @@ export class StormFireServiceLifecycleManager {
   private records = new Map<string, ServiceLifecycleRecord>();
 
   discover(service: StormFireServiceManifest): ServiceLifecycleRecord {
-    const compatibility = validateServiceCompatibility(service);
-    const record: ServiceLifecycleRecord = { service, state: "DISCOVERED", compatibility, updatedAt: new Date().toISOString(), reason: compatibility.compatible ? undefined : compatibility.errors.join("; ") };
+    const canonical = registerStormFireService(service);
+    const compatibility = validateServiceCompatibility(canonical);
+    const record: ServiceLifecycleRecord = { service: canonical, state: "DISCOVERED", compatibility, updatedAt: new Date().toISOString(), reason: compatibility.compatible ? undefined : compatibility.errors.join("; ") };
     this.records.set(service.id, record);
     stormFireServiceObservability.record({ serviceId: service.id, type: "LIFECYCLE", action: "DISCOVERED", state: record.state, success: true });
     return record;
@@ -55,6 +58,14 @@ export class StormFireServiceLifecycleManager {
     record.state = next;
     record.updatedAt = new Date().toISOString();
     record.reason = reason;
+
+    const canonical = getCanonicalStormFireService(serviceId);
+    if (canonical) {
+      const status = next === "DISABLED" ? "PAUSED" : next === "QUARANTINED" ? "OFFLINE" : next === "REGISTERED" ? "REGISTERED" : "ACTIVE";
+      stormFireServiceFabric.update(serviceId, { status });
+      record.service = fromCanonicalService(stormFireServiceFabric.get(serviceId)!);
+    }
+
     stormFireServiceObservability.record({ serviceId, type: "LIFECYCLE", action: "STATE_TRANSITION", state: next, success: true, message: `${previous} -> ${next}`, metadata: { previousState: previous, reason } });
     return record;
   }
@@ -64,6 +75,8 @@ export class StormFireServiceLifecycleManager {
   validate(serviceId: string) {
     const record = this.records.get(serviceId);
     if (!record) throw new Error(`Service has not been discovered: ${serviceId}`);
+    const canonical = getCanonicalStormFireService(serviceId);
+    if (canonical) record.service = fromCanonicalService(canonical);
     const compatibility = validateServiceCompatibility(record.service);
     record.compatibility = compatibility;
     stormFireServiceObservability.record({ serviceId, type: "COMPATIBILITY", action: "VALIDATION", success: compatibility.compatible, state: record.state, message: compatibility.errors.join("; ") || compatibility.warnings.join("; ") });
@@ -90,8 +103,20 @@ export class StormFireServiceLifecycleManager {
   monitor(serviceId: string) { return this.transition(serviceId, "MONITORED"); }
   disable(serviceId: string, reason = "Disabled by operator policy.") { return this.transition(serviceId, "DISABLED", reason); }
   quarantine(serviceId: string, reason = "Quarantined by policy.") { return this.transition(serviceId, "QUARANTINED", reason); }
-  get(serviceId: string) { return this.records.get(serviceId); }
-  list() { return [...this.records.values()]; }
+
+  get(serviceId: string) {
+    const record = this.records.get(serviceId);
+    if (!record) return undefined;
+    const canonical = getCanonicalStormFireService(serviceId);
+    return canonical ? { ...record, service: fromCanonicalService(canonical) } : record;
+  }
+
+  list() {
+    return [...this.records.values()].map((record) => {
+      const canonical = getCanonicalStormFireService(record.service.id);
+      return canonical ? { ...record, service: fromCanonicalService(canonical) } : record;
+    });
+  }
 }
 
 export const stormFireServiceLifecycle = new StormFireServiceLifecycleManager();
