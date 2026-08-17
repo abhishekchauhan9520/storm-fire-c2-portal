@@ -5,6 +5,8 @@ import { buildStormFireAdvisoryContext, generateBoundedAdvisory } from "./aiDeci
 test("advisory context is derived from one participant Dynamic COP", () => {
   const context = buildStormFireAdvisoryContext({
     participantId: "operator-command",
+    organizationIds: ["company-a"],
+    roleIds: ["COMMAND"],
     organizationId: "company-a",
     roleId: "COMMAND",
     geographicScopeIds: ["local-aor"],
