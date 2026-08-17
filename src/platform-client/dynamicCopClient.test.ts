@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { projectCopTracks, type DynamicCopResponse } from "./dynamicCopClient";
+import { fetchDynamicCop, projectCopTracks, type DynamicCopResponse } from "./dynamicCopClient";
 
 test("projects canonical Track information into a UI-only map projection", () => {
   const cop: DynamicCopResponse = {
@@ -61,4 +61,39 @@ test("drops track records without a renderable map position", () => {
   };
 
   assert.deepEqual(projectCopTracks(cop), []);
+});
+
+test("rejects a Dynamic COP response when participant context does not match the request", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    data: {
+      participantId: "operator-intel",
+      information: [],
+    },
+  }), { status: 200, headers: { "content-type": "application/json" } });
+
+  try {
+    await assert.rejects(
+      fetchDynamicCop("operator-command"),
+      /participant context mismatch/i,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("rejects a Dynamic COP response without an information projection", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    data: { participantId: "operator-command" },
+  }), { status: 200, headers: { "content-type": "application/json" } });
+
+  try {
+    await assert.rejects(
+      fetchDynamicCop("operator-command"),
+      /information projection is invalid/i,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
