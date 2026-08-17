@@ -21,11 +21,14 @@ export function evaluateStormFireInformationVisibility(
   );
 
   if (!service) return { allowed: false, reasons: ["Participant has no eligible canonical service for this information type."] };
-  if (!context.organizationIds.includes(information.organizationId)) return { allowed: false, reasons: ["Information organization is outside the participant organizational context."] };
+
+  const sameOrganization = context.organizationIds.includes(information.organizationId);
+  const relationshipAllowed = Boolean(information.relationshipId && context.relationshipIds.includes(information.relationshipId));
+  if (!sameOrganization && !relationshipAllowed) return { allowed: false, reasons: ["Information is outside the participant organizational and relationship context."] };
   if (information.geographicScopeId && !context.geographicScopeIds.includes(information.geographicScopeId)) return { allowed: false, reasons: ["Information is outside the participant geographic scope."] };
-  if (information.relationshipId && !context.relationshipIds.includes(information.relationshipId)) return { allowed: false, reasons: ["Participant has no authorized information relationship for this item."] };
   if (information.classification && context.informationClassification && information.classification !== context.informationClassification) return { allowed: false, reasons: ["Information classification does not match participant context."] };
 
-  reasons.push(`Visible through ${service.id} service.`);
+  reasons.push(sameOrganization ? `Visible within ${information.organizationId} organizational context.` : `Visible through ${information.relationshipId} information relationship.`);
+  reasons.push(`Eligible through ${service.id} service.`);
   return { allowed: true, reasons };
 }
