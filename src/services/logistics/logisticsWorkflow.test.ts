@@ -5,7 +5,7 @@ import { stormFireInformationRelationships } from "../../domain/informationRelat
 import { LogisticsService } from "./logisticsService";
 import { LogisticsWorkflow } from "./logisticsWorkflow";
 
-test("LogisticsWorkflow distributes a critical alert only to authorized recipients", () => {
+test("LogisticsWorkflow distributes a critical alert only to authorized recipients", async () => {
   const logistics = new LogisticsService();
   logistics.registerResource({ id: "fuel-1", name: "Fuel", kind: "FUEL", quantity: 100, unit: "L", readiness: "READY" });
   const policies = new InformationPolicyRegistry();
@@ -29,13 +29,14 @@ test("LogisticsWorkflow distributes a critical alert only to authorized recipien
   }
 
   const workflow = new LogisticsWorkflow(logistics, policies, stormFireInformationRelationships);
-  const result = workflow.createAndDistributeRequest(
+  const result = await workflow.createAndDistributeRequest(
     { id: "req-1", requesterParticipantId: "company-a", resourceId: "fuel-1", quantity: 20, priority: "CRITICAL" },
     ["brigade-a", "company-b", "ew-a", "unauthorized"],
     ["logistics-alert"],
   );
 
   assert.equal(result.request.status, "OPEN");
+  assert.equal(result.requestPublished, true);
   assert.deepEqual(result.alert?.recipientIds.sort(), ["brigade-a", "company-b", "ew-a"].sort());
   assert.equal(result.alert?.rejectedRecipientIds.includes("unauthorized"), true);
 });
