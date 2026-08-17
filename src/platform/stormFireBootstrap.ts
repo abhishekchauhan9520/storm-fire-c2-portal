@@ -46,7 +46,7 @@ export function bootstrapStormFireDevelopmentScenario(): void {
   }
 
   if (!stormFireGeographicScopes.get("local-aor")) {
-    stormFireGeographicScopes.register({ id: "local-aor", center: { latitude: 34.15, longitude: 77.58 }, radiusKm: 80, enabled: true });
+    stormFireGeographicScopes.register({ id: "local-aor", name: "Development Local AOR", center: { latitude: 34.15, longitude: 77.58 }, radiusKm: 80, enabled: true });
   }
 
   stormFireParticipants.update("operator-command", { organizationIds: ["company-a"], roleIds: ["COMMAND"], serviceIds: ["logistics", "uav"], geographicScopeIds: ["local-aor"], informationRelationshipIds: ["info-command-intel", "info-command-uav"], workspaceIds: ["company-cop"], canProduce: true, canConsume: true });
