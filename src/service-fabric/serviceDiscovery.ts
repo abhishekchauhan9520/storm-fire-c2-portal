@@ -1,4 +1,4 @@
-import type { StormFireServiceManifest } from "./serviceRegistry";
+import type { StormFireServiceManifest } from "./serviceManifestAdapter";
 import { discoverServiceCapabilities, validateServiceCompatibility, type CompatibilityResult, type ServiceCapabilityDescriptor } from "./serviceCompatibility";
 
 export interface ServiceDiscoveryRecord {
