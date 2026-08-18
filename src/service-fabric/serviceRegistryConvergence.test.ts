@@ -3,19 +3,18 @@ import test from "node:test";
 import { stormFireServiceFabric } from "./serviceFabric";
 import {
   fromCanonicalService,
-  getCanonicalStormFireService,
-  registerStormFireService,
-  stormFireServices,
+  registerCanonicalService,
+  stormFireServiceManifests,
   toCanonicalService,
-} from "./serviceRegistry";
+} from "./serviceManifestAdapter";
 
-const artillery = stormFireServices.find((service) => service.id === "artillery-c2")!;
+const artillery = stormFireServiceManifests.find((service) => service.id === "artillery-c2")!;
 
-test("service registry configuration registers into canonical Service Fabric", () => {
+test("service manifest registers into canonical Service Fabric", () => {
   stormFireServiceFabric.clear();
 
-  const registered = registerStormFireService(artillery);
-  const canonical = getCanonicalStormFireService(artillery.id);
+  const registered = registerCanonicalService(artillery, stormFireServiceFabric);
+  const canonical = stormFireServiceFabric.get(artillery.id);
 
   assert.ok(canonical);
   assert.equal(registered.id, canonical.id);
@@ -26,18 +25,18 @@ test("service registry configuration registers into canonical Service Fabric", (
   stormFireServiceFabric.clear();
 });
 
-test("re-registering an existing service does not create duplicate runtime state", () => {
+test("re-registering an existing manifest does not create duplicate runtime state", () => {
   stormFireServiceFabric.clear();
 
-  registerStormFireService(artillery);
-  registerStormFireService(artillery);
+  registerCanonicalService(artillery, stormFireServiceFabric);
+  registerCanonicalService(artillery, stormFireServiceFabric);
 
   assert.equal(stormFireServiceFabric.list().length, 1);
 
   stormFireServiceFabric.clear();
 });
 
-test("canonical service round-trips through the compatibility adapter", () => {
+test("canonical service round-trips through the manifest adapter", () => {
   const canonical = toCanonicalService(artillery);
   const compatibility = fromCanonicalService(canonical);
 
