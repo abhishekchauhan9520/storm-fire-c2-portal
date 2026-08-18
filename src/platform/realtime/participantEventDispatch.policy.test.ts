@@ -32,7 +32,7 @@ test("realtime fan-out requires both an information path and an allow policy", (
     fromParticipantId: "company-cdr",
     toParticipantId: "brigade-cdr",
     direction: "HORIZONTAL",
-    informationTypes: ["LogisticsRequest"],
+    allowedInformationTypes: ["LogisticsRequest"],
     enabled: true,
   });
 
