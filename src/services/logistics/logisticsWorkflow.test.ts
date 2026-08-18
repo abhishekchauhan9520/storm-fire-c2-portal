@@ -22,7 +22,7 @@ test("LogisticsWorkflow distributes a critical alert only to authorized recipien
     if (!existingIds.has(relationship.id)) {
       stormFireInformationRelationships.register({
         ...relationship,
-        informationTypes: ["logistics.alert"],
+        allowedInformationTypes: ["logistics.alert"],
         enabled: true,
       });
     }
