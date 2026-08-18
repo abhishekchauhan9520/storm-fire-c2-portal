@@ -1,5 +1,14 @@
 import type { CanonicalInformationRecord } from "./informationAdapter";
-import type { InformationDeliveryRecord } from "./informationFabricBridge";
+
+export interface InformationDeliveryRecord {
+  id: string;
+  informationId: string;
+  version: number;
+  participantId: string;
+  deliveredAt: string;
+  acknowledgedAt?: string;
+  status: "DELIVERED" | "ACKNOWLEDGED" | "EXPIRED";
+}
 
 export interface InformationHistoryEntry {
   informationId: string;
@@ -29,12 +38,7 @@ export class InMemoryInformationPersistence implements InformationPersistence {
   private deliveryEntries: InformationDeliveryRecord[] = [];
 
   append(record: CanonicalInformationRecord): void {
-    this.historyEntries.push({
-      informationId: record.id,
-      version: record.version,
-      recordedAt: new Date().toISOString(),
-      record: structuredClone(record),
-    });
+    this.historyEntries.push({ informationId: record.id, version: record.version, recordedAt: new Date().toISOString(), record: structuredClone(record) });
   }
 
   appendDelivery(delivery: InformationDeliveryRecord): void {
@@ -42,15 +46,11 @@ export class InMemoryInformationPersistence implements InformationPersistence {
   }
 
   history(informationId?: string): InformationHistoryEntry[] {
-    return this.historyEntries
-      .filter((entry) => !informationId || entry.informationId === informationId)
-      .sort((a, b) => b.recordedAt.localeCompare(a.recordedAt));
+    return this.historyEntries.filter((entry) => !informationId || entry.informationId === informationId).sort((a, b) => b.recordedAt.localeCompare(a.recordedAt));
   }
 
   deliveries(participantId?: string): InformationDeliveryRecord[] {
-    return this.deliveryEntries
-      .filter((entry) => !participantId || entry.participantId === participantId)
-      .sort((a, b) => b.deliveredAt.localeCompare(a.deliveredAt));
+    return this.deliveryEntries.filter((entry) => !participantId || entry.participantId === participantId).sort((a, b) => b.deliveredAt.localeCompare(a.deliveredAt));
   }
 
   snapshot(): InformationPersistenceSnapshot {
