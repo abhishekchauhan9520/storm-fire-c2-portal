@@ -20,29 +20,20 @@ export class AlertDispatchService {
     const rejected: string[] = [];
 
     for (const participantId of [...new Set(recipients)]) {
-      const policies = policyIds
-        .map((id) => stormFireAuthorization.get(id))
-        .filter((policy): policy is NonNullable<ReturnType<typeof stormFireAuthorization.get>> => Boolean(policy));
-      const hasCanonicalPolicy = policies.length > 0 && policies.some((policy) =>
-        policy.enabled &&
-        (!policy.informationTypes?.length || policy.informationTypes.includes("*") || policy.informationTypes.includes(alert.type)) &&
-        (!policy.geographicScopeIds?.length || policy.geographicScopeIds.some((id) => scopeIds.includes(id))),
-      );
-      const relationshipAllowed = Boolean(
-        !alert.producerParticipantId ||
-        this.relationships.canShare(alert.producerParticipantId, participantId, alert.type),
-      );
-
       const authorization = stormFireAuthorization.decide({
         requestId: `alert:${alert.id}:${participantId}`,
         participantId,
         informationType: alert.type,
         geographicScopeIds: scopeIds,
         classification: alert.classification,
-        relationshipIds: alert.relationships?.map((relationship) => relationship.id) ?? [],
       });
+      const requestedPoliciesExist = policyIds.length === 0 || policyIds.some((id) => Boolean(stormFireAuthorization.get(id)));
+      const relationshipAllowed = Boolean(
+        !alert.producerParticipantId ||
+        this.relationships.canShare(alert.producerParticipantId, participantId, alert.type),
+      );
 
-      const canDeliver = hasCanonicalPolicy && relationshipAllowed && authorization.allowed;
+      const canDeliver = requestedPoliciesExist && relationshipAllowed && authorization.allowed;
       (canDeliver ? allowed : rejected).push(participantId);
     }
 
