@@ -1,5 +1,5 @@
 import { stormFireEventBus, type StormFireEvent, type StormFireEventType } from "./serviceEventBus";
-import { validateServiceContract, type StormFireServiceManifest } from "./serviceRegistry";
+import { validateServiceContract, type StormFireServiceManifest } from "./serviceManifestAdapter";
 import { informationFabricBridge, type CanonicalInformationRecord } from "./informationFabricBridge";
 
 export interface ServiceQuery {
