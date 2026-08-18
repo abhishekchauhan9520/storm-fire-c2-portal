@@ -32,6 +32,8 @@ test("parallel alert dissemination and read authorization remain participant-spe
 
   assert.deepEqual(dissemination.deniedRecipientIds, []);
   assert.deepEqual(dissemination.allowedRecipientIds.sort(), ["operator-command", "operator-intel"].sort());
+  assert.ok(dissemination.matchedPolicyIds["operator-command"]?.length);
+  assert.ok(dissemination.matchedPolicyIds["operator-intel"]?.length);
 
   const alert: OperationalAlert = {
     id: "e2e-parallel-alert",
@@ -51,6 +53,8 @@ test("parallel alert dissemination and read authorization remain participant-spe
   const intelRead = authorizeAlertRead("operator-intel", alert, projectedObject!);
   assert.equal(commandRead.allowed, true);
   assert.equal(intelRead.allowed, true);
+  assert.ok(commandRead.matchedPolicyIds.length);
+  assert.ok(intelRead.matchedPolicyIds.length);
 
   const deniedRead = authorizeAlertRead("logistics-service", alert, projectedObject!);
   assert.equal(deniedRead.allowed, false);
