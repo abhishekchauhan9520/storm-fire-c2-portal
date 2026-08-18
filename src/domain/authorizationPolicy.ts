@@ -31,6 +31,11 @@ export class AuthorizationPolicyEngine {
     this.rules.set(rule.id, { ...rule });
   }
 
+  get(id: string): Policy | undefined {
+    const rule = this.rules.get(id);
+    return rule ? { ...rule } : undefined;
+  }
+
   decide(request: StormFireAuthorizationRequest): StormFireAuthorizationDecision {
     const matches = [...this.rules.values()]
       .filter((rule) => rule.enabled)
@@ -38,7 +43,7 @@ export class AuthorizationPolicyEngine {
       .filter((rule) => this.matches(rule.serviceIds, request.serviceId))
       .filter((rule) => this.intersects(rule.organizationIds, request.organizationIds))
       .filter((rule) => this.intersects(rule.roleIds, request.roleIds))
-      .filter((rule) => this.intersects((rule as Policy & { relationshipIds?: string[] }).relationshipIds, request.relationshipIds))
+      .filter((rule) => this.intersects(rule.relationshipIds, request.relationshipIds))
       .filter((rule) => this.intersects(rule.informationTypes, [request.informationType]))
       .filter((rule) => this.intersects(rule.geographicScopeIds, request.geographicScopeIds))
       .filter((rule) => this.intersects(rule.classifications, request.classification ? [request.classification] : undefined))
