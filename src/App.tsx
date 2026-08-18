@@ -5,40 +5,12 @@ import KillChainModule from "./components/KillChainModule";
 import IntelligenceBrain from "./components/IntelligenceBrain";
 import StrixAdvisor from "./components/StrixAdvisor";
 import UnifiedSectorHub from "./components/UnifiedSectorHub";
+import { fetchPlatformProjection, type OperationalAlertProjection, type OperationalEventProjection, type ParticipantContextProjection } from "./platform-client/platformProjectionClient";
 import type { KillChainState, TacticalLog, TacticalTrack } from "./types";
 
 type Workspace = "MONITOR" | "SERVICES" | "ASSESS" | "ISR" | "STRIX";
 
 const PARTICIPANT_ID = "operator-command";
-
-interface ParticipantContextProjection {
-  participantId: string;
-  organizationIds: string[];
-  roleIds: string[];
-  serviceIds: string[];
-  geographicScopeIds: string[];
-  informationRelationshipIds: string[];
-  subscriptionIds: string[];
-  workspaceIds: string[];
-  policyIds: string[];
-  classification?: string;
-  resolvedAt: string;
-}
-
-interface OperationalEventProjection {
-  id: string;
-  type: string;
-  occurredAt: string;
-  participantId: string;
-}
-
-interface OperationalAlertProjection {
-  id: string;
-  severity: string;
-  state: string;
-  createdAt: string;
-  updatedAt: string;
-}
 
 export default function App() {
   const [workspace, setWorkspace] = useState<Workspace>("MONITOR");
@@ -53,35 +25,23 @@ export default function App() {
 
   useEffect(() => {
     const controller = new AbortController();
+    setContextStatus("LOADING");
 
-    async function loadPlatformProjections() {
-      setContextStatus("LOADING");
-      try {
-        const [contextResponse, eventsResponse, alertsResponse] = await Promise.all([
-          fetch(`/api/participant-context/${encodeURIComponent(PARTICIPANT_ID)}`, { signal: controller.signal, cache: "no-store", headers: { Accept: "application/json" } }),
-          fetch("/api/events", { signal: controller.signal, cache: "no-store", headers: { Accept: "application/json" } }),
-          fetch("/api/alerts", { signal: controller.signal, cache: "no-store", headers: { Accept: "application/json" } }),
-        ]);
-        if (!contextResponse.ok || !eventsResponse.ok || !alertsResponse.ok) throw new Error("Storm Fire platform projections are unavailable.");
-
-        const contextBody = await contextResponse.json() as { data?: ParticipantContextProjection };
-        const eventsBody = await eventsResponse.json() as OperationalEventProjection[];
-        const alertsBody = await alertsResponse.json() as OperationalAlertProjection[];
-        if (!contextBody.data) throw new Error("Participant context projection is missing.");
-        setContext(contextBody.data);
-        setEvents(Array.isArray(eventsBody) ? eventsBody : []);
-        setAlerts(Array.isArray(alertsBody) ? alertsBody : []);
+    fetchPlatformProjection(PARTICIPANT_ID, controller.signal)
+      .then((projection) => {
+        setContext(projection.context);
+        setEvents(projection.events);
+        setAlerts(projection.alerts);
         setContextStatus("READY");
-      } catch (error) {
+      })
+      .catch((error) => {
         if (error instanceof DOMException && error.name === "AbortError") return;
         setContext(null);
         setEvents([]);
         setAlerts([]);
         setContextStatus("ERROR");
-      }
-    }
+      });
 
-    void loadPlatformProjections();
     return () => controller.abort();
   }, []);
 
