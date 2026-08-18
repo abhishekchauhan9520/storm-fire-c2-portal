@@ -40,11 +40,21 @@ export function authorizeInformationProduction(
     classification: object.classification,
   }));
 
-  const allowed = decisions.filter((decision) => decision.allowed);
+  const authorizedServiceIds = decisions
+    .map((decision, index) => (decision.allowed ? serviceIds[index] : undefined))
+    .filter((serviceId): serviceId is string => Boolean(serviceId));
+  const matchedPolicyIds = [...new Set(
+    decisions
+      .filter((decision) => decision.allowed)
+      .flatMap((decision) => decision.matchedRuleIds),
+  )];
+
   return {
-    allowed: allowed.length > 0,
-    serviceIds: allowed.map((_decision, index) => serviceIds[decisions.indexOf(decision)]).filter(Boolean),
-    matchedPolicyIds: [...new Set(allowed.flatMap((decision) => decision.matchedRuleIds))],
-    reason: allowed.length > 0 ? "Information production authorized through at least one canonical service path." : "No canonical service production policy authorizes this information type.",
+    allowed: authorizedServiceIds.length > 0,
+    serviceIds: authorizedServiceIds,
+    matchedPolicyIds,
+    reason: authorizedServiceIds.length > 0
+      ? "Information production authorized through at least one canonical service path."
+      : "No canonical service production policy authorizes this information type.",
   };
 }
