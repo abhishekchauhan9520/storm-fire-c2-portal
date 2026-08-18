@@ -5,7 +5,7 @@ import KillChainModule from "./components/KillChainModule";
 import IntelligenceBrain from "./components/IntelligenceBrain";
 import StrixAdvisor from "./components/StrixAdvisor";
 import UnifiedSectorHub from "./components/UnifiedSectorHub";
-import { fetchPlatformProjection, type OperationalAlertProjection, type OperationalEventProjection, type ParticipantContextProjection } from "./platform-client/platformProjectionClient";
+import { fetchPlatformProjection, subscribePlatformProjectionInvalidation, type OperationalAlertProjection, type OperationalEventProjection, type ParticipantContextProjection } from "./platform-client/platformProjectionClient";
 import type { KillChainState, TacticalLog, TacticalTrack } from "./types";
 
 type Workspace = "MONITOR" | "SERVICES" | "ASSESS" | "ISR" | "STRIX";
@@ -24,25 +24,41 @@ export default function App() {
   const [notices, setNotices] = useState<TacticalLog[]>([]);
 
   useEffect(() => {
-    const controller = new AbortController();
-    setContextStatus("LOADING");
+    let disposed = false;
+    let refreshController: AbortController | undefined;
 
-    fetchPlatformProjection(PARTICIPANT_ID, controller.signal)
-      .then((projection) => {
+    const refreshProjection = async () => {
+      refreshController?.abort();
+      const controller = new AbortController();
+      refreshController = controller;
+      if (!disposed) setContextStatus("LOADING");
+
+      try {
+        const projection = await fetchPlatformProjection(PARTICIPANT_ID, controller.signal);
+        if (disposed || controller.signal.aborted) return;
         setContext(projection.context);
         setEvents(projection.events);
         setAlerts(projection.alerts);
         setContextStatus("READY");
-      })
-      .catch((error) => {
-        if (error instanceof DOMException && error.name === "AbortError") return;
+      } catch (error) {
+        if (disposed || controller.signal.aborted) return;
         setContext(null);
         setEvents([]);
         setAlerts([]);
         setContextStatus("ERROR");
-      });
+      }
+    };
 
-    return () => controller.abort();
+    void refreshProjection();
+    const unsubscribe = subscribePlatformProjectionInvalidation(PARTICIPANT_ID, () => {
+      void refreshProjection();
+    });
+
+    return () => {
+      disposed = true;
+      refreshController?.abort();
+      unsubscribe();
+    };
   }, []);
 
   const addUiNotice = (notice: Omit<TacticalLog, "id" | "timestamp">) => {
