@@ -1,6 +1,6 @@
 import { type StormFireServiceManifest, registerCanonicalService, fromCanonicalService } from "./serviceManifestAdapter";
 import { stormFireServiceFabric } from "./serviceFabric";
-import { stormFirePolicyEngine, type ServiceIdentity } from "./servicePolicy";
+import { stormFireParticipants } from "./participantModel";
 import { validateServiceCompatibility, type CompatibilityResult } from "./serviceCompatibility";
 import { stormFireServiceObservability } from "./serviceObservability";
 
@@ -13,6 +13,15 @@ export type ServiceLifecycleState =
   | "MONITORED"
   | "DISABLED"
   | "QUARANTINED";
+
+export interface ServiceIdentity {
+  serviceId: string;
+  principal: string;
+  roles: string[];
+  trustLevel: "TRUSTED" | "RESTRICTED" | "QUARANTINED";
+  issuedAt: string;
+  expiresAt?: string;
+}
 
 export interface ServiceLifecycleRecord {
   service: StormFireServiceManifest;
@@ -98,14 +107,25 @@ export class StormFireServiceLifecycleManager {
     const record = this.records.get(serviceId);
     if (!record) throw new Error(`Service has not been discovered: ${serviceId}`);
     if (record.state !== "VALIDATED") return this.transition(serviceId, "QUARANTINED", "Authorization attempted before successful compatibility validation.");
-    if (identity.serviceId !== serviceId || identity.trustLevel === "QUARANTINED") {
-      stormFireServiceObservability.record({ serviceId, type: "AUTHORIZATION", action: "IDENTITY_REJECTED", state: record.state, success: false });
-      return this.transition(serviceId, "QUARANTINED", "Identity validation failed.");
-    }
+
+    const service = stormFireServiceFabric.get(serviceId);
+    const owner = service ? stormFireParticipants.get(service.ownerParticipantId) : undefined;
+    const validIdentity = identity.serviceId === serviceId && identity.trustLevel !== "QUARANTINED" && (!identity.expiresAt || Date.now() < Date.parse(identity.expiresAt));
+    const ownerContext = Boolean(owner?.enabled && owner?.canConsume && owner.serviceIds.includes(serviceId));
+    const serviceOperational = Boolean(service && (service.status === "ACTIVE" || service.status === "REGISTERED"));
+    const authorized = validIdentity && ownerContext && serviceOperational;
+
+    stormFireServiceObservability.record({
+      serviceId,
+      type: "AUTHORIZATION",
+      action: "CANONICAL_SERVICE_CONTEXT_CHECK",
+      state: record.state,
+      success: authorized,
+      message: authorized ? "Service owner and canonical service context accepted." : "Service lifecycle authorization denied by canonical service/participant context.",
+    });
+
+    if (!authorized) return this.transition(serviceId, "QUARANTINED", "Canonical service/participant context authorization failed.");
     record.identity = identity;
-    const authorized = stormFirePolicyEngine.authorize({ identity, service: record.service, action: "DISCOVER" });
-    stormFireServiceObservability.record({ serviceId, type: "AUTHORIZATION", action: "POLICY_CHECK", state: record.state, success: authorized });
-    if (!authorized) return this.transition(serviceId, "QUARANTINED", "Policy authorization failed.");
     return this.transition(serviceId, "AUTHORIZED");
   }
 
