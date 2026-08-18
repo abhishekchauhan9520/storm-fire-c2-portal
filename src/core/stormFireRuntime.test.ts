@@ -1,6 +1,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { createStormFireRuntime } from "./stormFireRuntime";
+import { FileInformationFabricPersistence } from "../platform/persistence/informationFabricPersistence";
+import { InformationFabric } from "../domain/informationFabric";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import type { CanonicalOperationalObject, OperationalAlert } from "../types";
 
 describe("Storm Fire runtime", () => {
@@ -29,7 +34,7 @@ describe("Storm Fire runtime", () => {
     assert.equal(runtime.state.objects[0].version, 2);
   });
 
-  it("maintains independent parallel alert records", () => {
+  it("keeps parallel alert records in the canonical fabric projection", () => {
     const runtime = createStormFireRuntime();
     const makeAlert = (id: string): OperationalAlert => ({
       id, objectId: "obj-1", severity: "HIGH", state: "OPEN",
@@ -38,5 +43,29 @@ describe("Storm Fire runtime", () => {
     runtime.publishAlert(makeAlert("a-1"));
     runtime.publishAlert(makeAlert("a-2"));
     assert.deepEqual(runtime.state.alerts.map((alert) => alert.id), ["a-1", "a-2"]);
+    assert.equal(runtime.informationFabric.historyFor("operational.alert").length, 2);
+  });
+
+  it("rebuilds alert state from durable canonical information", async () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "storm-fire-runtime-alerts-"));
+    const filePath = path.join(directory, "information.json");
+
+    try {
+      const firstFabric = new InformationFabric(new FileInformationFabricPersistence(filePath));
+      const firstRuntime = createStormFireRuntime({}, firstFabric);
+      firstRuntime.publishAlert({
+        id: "a-1", objectId: "obj-1", severity: "CRITICAL", state: "OPEN",
+        createdAt: "2026-08-18T00:00:00Z", updatedAt: "2026-08-18T00:01:00Z", recipients: ["p-1"],
+      });
+
+      const secondFabric = new InformationFabric(new FileInformationFabricPersistence(filePath));
+      await secondFabric.hydrate();
+      const secondRuntime = createStormFireRuntime({}, secondFabric);
+
+      assert.deepEqual(secondRuntime.state.alerts.map((alert) => alert.id), ["a-1"]);
+      assert.equal(secondRuntime.state.alerts[0]?.severity, "CRITICAL");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 });
