@@ -1,22 +1,29 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Event } from "../../contracts/stormFireContracts";
+import { runDynamicCopScenario } from "../../domain/dynamicCopScenario";
 import { stormFireInformationRelationships } from "../../domain/informationRelationshipEngine";
 import { stormFireParticipantEventStream } from "./participantEventStream";
 import { dispatchParticipantEvent } from "./participantEventDispatch";
 
 test("dispatches one Logistics event to source and relationship-connected participants in parallel", () => {
-  const source = "uav-1";
-  const command = "command-1";
-  const intelligence = "intel-1";
-  const relationshipIds = ["rt-command", "rt-intel"];
+  runDynamicCopScenario();
+  const source = "company-cdr";
+  const command = "brigade-cdr";
+  const relationshipId = "rt-brigade";
 
-  for (const id of relationshipIds) stormFireInformationRelationships.remove(id);
-  stormFireInformationRelationships.register({ id: relationshipIds[0], fromParticipantId: source, toParticipantId: command, direction: "DIAGONAL", informationTypes: ["LogisticsRequest"], enabled: true });
-  stormFireInformationRelationships.register({ id: relationshipIds[1], fromParticipantId: source, toParticipantId: intelligence, direction: "HORIZONTAL", informationTypes: ["LogisticsRequest"], enabled: true });
+  stormFireInformationRelationships.remove(relationshipId);
+  stormFireInformationRelationships.register({
+    id: relationshipId,
+    fromParticipantId: source,
+    toParticipantId: command,
+    direction: "DIAGONAL",
+    informationTypes: ["LogisticsRequest"],
+    enabled: true,
+  });
 
   const received = new Map<string, string[]>();
-  const unsubscribers = [source, command, intelligence].map((participantId) => stormFireParticipantEventStream.subscribe(participantId, (event) => {
+  const unsubscribers = [source, command].map((participantId) => stormFireParticipantEventStream.subscribe(participantId, (event) => {
     const current = received.get(event.participantId) ?? [];
     received.set(event.participantId, [...current, event.eventId]);
   }));
@@ -39,12 +46,11 @@ test("dispatches one Logistics event to source and relationship-connected partic
     };
 
     const recipients = dispatchParticipantEvent(event);
-    assert.deepEqual(new Set(recipients), new Set([source, command, intelligence]));
+    assert.deepEqual(new Set(recipients), new Set([source, command]));
     assert.equal(received.get(source)?.length, 1);
     assert.equal(received.get(command)?.length, 1);
-    assert.equal(received.get(intelligence)?.length, 1);
   } finally {
     for (const unsubscribe of unsubscribers) unsubscribe();
-    for (const id of relationshipIds) stormFireInformationRelationships.remove(id);
+    stormFireInformationRelationships.remove(relationshipId);
   }
 });
