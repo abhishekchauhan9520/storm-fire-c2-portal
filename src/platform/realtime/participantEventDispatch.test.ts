@@ -20,7 +20,7 @@ test("dispatches one canonical Logistics event to source and relationship-connec
     fromParticipantId: source,
     toParticipantId: recipient,
     direction: "VERTICAL",
-    informationTypes: ["LogisticsRequest"],
+    allowedInformationTypes: ["LogisticsRequest"],
     enabled: true,
   });
 
