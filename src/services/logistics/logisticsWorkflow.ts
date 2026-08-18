@@ -1,6 +1,5 @@
 import { stormFireInformationFabric } from "../../domain/informationFabric";
 import { AlertDispatchResult, AlertDispatchService } from "../../domain/alertDispatch";
-import { InformationPolicyRegistry } from "../../domain/informationPolicy";
 import { InformationRelationshipEngine, stormFireInformationRelationships } from "../../domain/informationRelationshipEngine";
 import { stormFireEventSpine } from "../../platform/event-spine/eventSpine";
 import type { Event } from "../../contracts/stormFireContracts";
@@ -12,7 +11,6 @@ export interface LogisticsWorkflowResult { request: LogisticsRequest; requestEve
 export class LogisticsWorkflow {
   constructor(
     private readonly logistics: LogisticsService,
-    private readonly policies: InformationPolicyRegistry,
     private readonly relationships: InformationRelationshipEngine = stormFireInformationRelationships,
   ) {}
 
@@ -59,7 +57,7 @@ export class LogisticsWorkflow {
         provenance: { sourceId: "logistics", observedAt: now, receivedAt: now },
         payload: { requestId: request.id, priority: request.priority, resourceId: request.resourceId, quantity: request.quantity },
       };
-      alert = new AlertDispatchService(stormFireInformationFabric, this.policies, this.relationships)
+      alert = new AlertDispatchService(stormFireInformationFabric, this.relationships)
         .dispatch(alertEnvelope, recipients, policyIds, scopeIds);
     }
 
