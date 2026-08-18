@@ -1,4 +1,4 @@
-import type { RelationshipAxis } from "./serviceRegistry";
+import type { RelationshipAxis } from "./serviceManifestAdapter";
 
 export interface StormFireRelationship {
   id: string;
