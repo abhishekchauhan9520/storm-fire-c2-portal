@@ -11,18 +11,25 @@ const EMPTY: Store = { version: 1, messages: [] };
 
 /** Durable single-node history adapter for the canonical Information Fabric. */
 export class FileInformationFabricPersistence implements InformationFabricPersistence {
+  private writeQueue: Promise<void> = Promise.resolve();
+
   constructor(private readonly filePath = process.env.STORM_FIRE_INFORMATION_STORE ?? path.join(".storm-fire-data", "information-fabric.json")) {}
 
   async load(): Promise<StormFireInformationEnvelope[]> {
+    await this.writeQueue;
     return this.readStore().messages.map((message) => this.clone(message));
   }
 
   async append(message: StormFireInformationEnvelope): Promise<void> {
-    const store = this.readStore();
-    const exists = store.messages.some((item) => item.id === message.id && item.version === message.version && item.kind === message.kind);
-    if (exists) return;
-    store.messages.push(this.clone(message));
-    this.writeStore(store);
+    const canonical = this.clone(message);
+    this.writeQueue = this.writeQueue.then(async () => {
+      const store = this.readStore();
+      const exists = store.messages.some((item) => item.id === canonical.id && item.version === canonical.version && item.kind === canonical.kind);
+      if (exists) return;
+      store.messages.push(canonical);
+      this.writeStore(store);
+    });
+    await this.writeQueue;
   }
 
   private readStore(): Store {
