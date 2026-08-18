@@ -1,11 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
-import type { CommandSystem, Service } from "../types";
+import type { Service } from "../types";
 import { Activity, Boxes, CheckCircle2, CircleAlert, RefreshCw, Radio, ShieldCheck } from "lucide-react";
 
 interface UnifiedSectorHubProps {
-  systems?: CommandSystem[];
-  onToggleOverlay?: (systemId: string) => void;
-  onSetStatus?: (systemId: string, status: CommandSystem["status"]) => void;
   onAddLog?: (log: { source: string; type: "ALERT" | "INFO" | "SUCCESS" | "WARNING"; message: string }) => void;
 }
 
