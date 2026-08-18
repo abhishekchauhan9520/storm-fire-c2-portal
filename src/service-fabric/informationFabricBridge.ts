@@ -24,7 +24,7 @@ function mapClassification(classification: CanonicalInformationRecord["provenanc
 
 function toCanonicalEnvelope(record: CanonicalInformationRecord): InformationObject {
   const kind = record.kind === "SERVICE_EVENT" || record.kind === "ALERT" ? "EVENT" : "OBJECT";
-  const envelope: InformationObject = {
+  return {
     id: record.id,
     kind,
     type: record.kind,
@@ -47,7 +47,6 @@ function toCanonicalEnvelope(record: CanonicalInformationRecord): InformationObj
     payload: record.payload,
     tags: record.relationships.flatMap((relationship) => [`rel:${relationship.targetId}:${relationship.relation}`]),
   };
-  return envelope;
 }
 
 function fromCanonicalEnvelope(envelope: InformationObject): CanonicalInformationRecord {
@@ -58,10 +57,9 @@ function fromCanonicalEnvelope(envelope: InformationObject): CanonicalInformatio
       return { targetId, relation: relationParts.join(":") || "RELATED" };
     });
 
-  const kind = envelope.type as CanonicalInformationKind;
   return {
     id: envelope.id,
-    kind,
+    kind: envelope.type as CanonicalInformationKind,
     source: envelope.producerServiceId ?? envelope.provenance.sourceId,
     observedAt: envelope.occurredAt,
     payload: envelope.payload,
@@ -81,7 +79,7 @@ function fromCanonicalEnvelope(envelope: InformationObject): CanonicalInformatio
 /**
  * Transitional compatibility facade. The canonical Information Fabric owns
  * operational information state; this layer only translates legacy callers
- * and records delivery metadata needed by the existing service/workspace APIs.
+ * and records delivery metadata needed by existing service/workspace APIs.
  */
 class InformationFabricBridge {
   private listeners = new Set<InformationListener>();
@@ -147,10 +145,13 @@ class InformationFabricBridge {
     );
   }
 
-  history(informationId?: string) {
-    return stormFireInformationPersistence.history(informationId);
+  /** Operational history reads now come from the canonical Information Fabric, not persistence. */
+  history(informationId?: string): CanonicalInformationRecord[] {
+    const records = this.snapshot();
+    return informationId ? records.filter((record) => record.id === informationId) : records;
   }
 
+  /** Delivery history remains persistence-backed because it is delivery/audit metadata, not operational information state. */
   deliveriesFor(participantId?: string) {
     return stormFireInformationPersistence.deliveries(participantId);
   }
