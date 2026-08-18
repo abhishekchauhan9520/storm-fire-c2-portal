@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import { createStormFireRuntime } from "./src/core/stormFireRuntime";
 import { stormFireAuthorization } from "./src/domain/authorizationPolicy";
+import { authorizeAlertDissemination } from "./src/domain/alertAuthorization";
 import { buildDynamicCopFromFabric } from "./src/domain/dynamicCopFromFabric";
 import { resolveParticipantOperationalContext } from "./src/domain/participantOperationalContext";
 import { buildStormFireAdvisoryContext, generateBoundedAdvisory } from "./src/domain/aiDecisionSupport";
@@ -155,9 +156,6 @@ app.post("/api/access/decide", (req, res) => {
       classification: canonicalContext.informationClassification,
     };
 
-    // All participant, organization, role, relationship, geography and
-    // classification context is reconstructed from the authenticated identity;
-    // client-supplied context claims are intentionally ignored.
     return res.json({ data: stormFireAuthorization.decide(request) });
   } catch (error) {
     return res.status(400).json({ error: error instanceof Error ? error.message : "Invalid authorization request." });
@@ -192,7 +190,32 @@ app.post("/api/alerts", (req, res) => {
   const recipientIds = Array.isArray(req.body?.recipients) ? req.body.recipients : [];
   if (!recipientIds.includes(authenticatedId)) return res.status(403).json({ error: "Alert recipient list must include the authenticated participant." });
   if (!req.body?.id || !req.body?.objectId) return res.status(400).json({ error: "Alert requires id and objectId." });
-  return res.status(202).json(runtime.publishAlert(req.body));
+
+  const object = runtime.state.objects.find((candidate) => candidate.id === req.body.objectId);
+  if (!object) return res.status(404).json({ error: "Alert object is not present in the canonical Information Fabric projection." });
+
+  try {
+    const serviceId = typeof req.body?.serviceId === "string" ? req.body.serviceId : undefined;
+    const authorization = authorizeAlertDissemination({
+      issuerParticipantId: authenticatedId,
+      recipientParticipantIds: recipientIds,
+      informationObject: object,
+      serviceId,
+    });
+
+    if (authorization.deniedRecipientIds.length > 0) {
+      return res.status(403).json({
+        error: "Alert dissemination is not authorized for one or more requested recipients.",
+        deniedRecipientIds: authorization.deniedRecipientIds,
+        allowedRecipientIds: authorization.allowedRecipientIds,
+        matchedPolicyIds: authorization.matchedPolicyIds,
+      });
+    }
+
+    return res.status(202).json(runtime.publishAlert({ ...req.body, recipients: authorization.allowedRecipientIds }));
+  } catch (error) {
+    return res.status(403).json({ error: error instanceof Error ? error.message : "Alert dissemination authorization failed." });
+  }
 });
 
 app.post("/api/advisory", (req, res) => {
@@ -221,7 +244,7 @@ async function startServer() {
   } else {
     const distPath = path.join(__dirname, "dist");
     app.use(express.static(distPath));
-    app.get("*", (_req, res) => res.sendFile(path.join(distPath, "index.html")));
+    app.get("*", (_req, res) => res.sendFile(path.join(distPath, "index.html"));
   }
   app.listen(PORT, "0.0.0.0", () => console.log(`[STORM-FIRE] Information runtime operational on port ${PORT}`));
 }
