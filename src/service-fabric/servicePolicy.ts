@@ -1,6 +1,14 @@
 import type { StormFireServiceManifest } from "./serviceManifestAdapter";
 import type { AlertPriority } from "./parallelAlertFabric";
 
+/**
+ * @deprecated Transitional compatibility contract only.
+ *
+ * Operational authorization is owned by src/domain/authorizationPolicy.ts.
+ * This file is retained solely for legacy adapters that still exchange the
+ * older service-policy shape; it must not be used as a second source of
+ * operational authorization truth.
+ */
 export type ServiceAction =
   | "DISCOVER"
   | "CONSUME"
@@ -35,11 +43,18 @@ export interface AuthorizationRequest {
   alertPriority?: AlertPriority;
 }
 
+/** Legacy compatibility evaluator. New operational paths must use AuthorizationPolicyEngine. */
 export class StormFirePolicyEngine {
-  private policies = new Map<string, ServicePolicy>();
+  private readonly policies = new Map<string, ServicePolicy>();
 
   registerPolicy(policy: ServicePolicy): void {
-    this.policies.set(policy.serviceId, policy);
+    this.policies.set(policy.serviceId, {
+      ...policy,
+      allowedActions: [...policy.allowedActions],
+      allowedKinds: policy.allowedKinds ? [...policy.allowedKinds] : undefined,
+      allowedRecipients: policy.allowedRecipients ? [...policy.allowedRecipients] : undefined,
+      allowedAlertPriorities: policy.allowedAlertPriorities ? [...policy.allowedAlertPriorities] : undefined,
+    });
   }
 
   authorize(request: AuthorizationRequest): boolean {
@@ -51,8 +66,7 @@ export class StormFirePolicyEngine {
 
     const policy = this.policies.get(service.id);
     if (!policy || !policy.allowedActions.includes(action)) return false;
-    if (!service.capabilities.includes(action)) return false;
-
+    if (!service.capabilities.some((capability) => capability.id === action || capability.id === action.replace("CONTRIBUTE", "CONTRIBUTE"))) return false;
     if (request.resourceKind && policy.allowedKinds && !policy.allowedKinds.includes(request.resourceKind)) return false;
     if (request.recipient && policy.allowedRecipients && !policy.allowedRecipients.includes(request.recipient)) return false;
     if (request.alertPriority && policy.allowedAlertPriorities && !policy.allowedAlertPriorities.includes(request.alertPriority)) return false;
@@ -61,4 +75,8 @@ export class StormFirePolicyEngine {
   }
 }
 
+/**
+ * Legacy singleton. Do not add new operational consumers.
+ * Canonical authorization lives in stormFireAuthorization.
+ */
 export const stormFirePolicyEngine = new StormFirePolicyEngine();
