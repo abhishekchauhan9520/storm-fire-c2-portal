@@ -1,11 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { StormFireInformationEnvelope } from "../../domain/informationFabric";
-
-export interface InformationFabricPersistence {
-  load(): Promise<StormFireInformationEnvelope[]>;
-  append(message: StormFireInformationEnvelope): Promise<void>;
-}
+import type { StormFireInformationEnvelope, InformationFabricPersistence } from "../../domain/informationFabric";
 
 interface Store {
   version: 1;
