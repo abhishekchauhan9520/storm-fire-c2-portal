@@ -1,25 +1,15 @@
 import React, { useEffect, useState } from "react";
 import type { Service } from "../contracts/stormFireContracts";
-import type { Role } from "../types";
 import { fetchLogisticsResources, fetchServices, type LogisticsResource } from "../platform-client/operationsClient";
 import { Activity, Boxes, RefreshCw, ShieldCheck, Truck } from "lucide-react";
 
-interface CommanderDashboardProps {
-  currentRole?: Role;
-  onChangeRole?: (role: Role) => void;
-  /** Legacy props remain accepted during consumer migration; canonical APIs are authoritative. */
-  nodes?: unknown[];
-  onToggleNodeStatus?: (nodeId: string) => void;
-  combatUnits?: unknown[];
-  onRestoreReadyStatus?: (unitId: string) => void;
-  logs?: unknown[];
-  himalayanOps?: boolean;
-  onToggleHimalayanOps?: () => void;
-}
-
 type LoadState = "LOADING" | "READY" | "ERROR";
 
-export default function CommanderDashboard({ currentRole = "COMMANDER" as Role }: CommanderDashboardProps) {
+interface CommanderDashboardProps {
+  currentRole?: string;
+}
+
+export default function CommanderDashboard({ currentRole = "COMMANDER" }: CommanderDashboardProps) {
   const [services, setServices] = useState<Service[]>([]);
   const [resources, setResources] = useState<LogisticsResource[]>([]);
   const [status, setStatus] = useState<LoadState>("LOADING");
@@ -58,7 +48,7 @@ export default function CommanderDashboard({ currentRole = "COMMANDER" as Role }
           <ShieldCheck className="h-5 w-5 text-cyan-400" />
           <div>
             <div className="text-[10px] text-slate-500 font-mono uppercase font-bold">PARTICIPANT OPERATIONAL CONTEXT</div>
-            <div className="text-xs text-white font-mono font-bold uppercase">Current role: {String(currentRole).replaceAll("_", " ")}</div>
+            <div className="text-xs text-white font-mono font-bold uppercase">Current role: {currentRole.replaceAll("_", " ")}</div>
           </div>
         </div>
         <div className="text-[8px] text-slate-500 font-mono uppercase">Canonical projections only • no local operational store</div>
