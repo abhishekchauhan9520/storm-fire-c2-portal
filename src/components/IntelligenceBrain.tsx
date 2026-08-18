@@ -3,6 +3,7 @@ import { Eye, Layers, RefreshCw, ShieldCheck } from "lucide-react";
 import type { TacticalLog } from "../types";
 
 interface IntelligenceBrainProps {
+  participantId: string;
   onAddLog: (log: Omit<TacticalLog, "id" | "timestamp">) => void;
 }
 
@@ -13,7 +14,7 @@ interface DiscoveryResult {
   confidence: number;
 }
 
-export default function IntelligenceBrain({ onAddLog }: IntelligenceBrainProps) {
+export default function IntelligenceBrain({ participantId, onAddLog }: IntelligenceBrainProps) {
   const [sensorBand, setSensorBand] = useState<"EO" | "IR" | "SAR">("EO");
   const [zoomLevel, setZoomLevel] = useState<"1X" | "4X" | "16X">("4X");
   const [processing, setProcessing] = useState(false);
@@ -86,7 +87,7 @@ export default function IntelligenceBrain({ onAddLog }: IntelligenceBrainProps) 
           kind: "Observation",
           version: 1,
           timestamp: now,
-          sourceParticipantId: "operator-intel",
+          sourceParticipantId: participantId,
           domains: ["JOINT", "LAND"],
           classification: "CONTROLLED",
           confidence: result.confidence,
