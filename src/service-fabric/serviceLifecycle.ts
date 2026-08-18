@@ -1,5 +1,4 @@
-import type { StormFireServiceManifest } from "./serviceRegistry";
-import { registerStormFireService, fromCanonicalService, getCanonicalStormFireService } from "./serviceRegistry";
+import { type StormFireServiceManifest, registerCanonicalService, fromCanonicalService } from "./serviceManifestAdapter";
 import { stormFireServiceFabric } from "./serviceFabric";
 import { stormFirePolicyEngine, type ServiceIdentity } from "./servicePolicy";
 import { validateServiceCompatibility, type CompatibilityResult } from "./serviceCompatibility";
@@ -35,13 +34,24 @@ const transitions: Record<ServiceLifecycleState, ServiceLifecycleState[]> = {
   QUARANTINED: ["REGISTERED", "DISABLED"],
 };
 
+function canonicalManifest(serviceId: string): StormFireServiceManifest | undefined {
+  const canonical = stormFireServiceFabric.get(serviceId);
+  return canonical ? fromCanonicalService(canonical) : undefined;
+}
+
 export class StormFireServiceLifecycleManager {
   private records = new Map<string, ServiceLifecycleRecord>();
 
   discover(service: StormFireServiceManifest): ServiceLifecycleRecord {
-    const canonical = registerStormFireService(service);
+    const canonical = registerCanonicalService(service, stormFireServiceFabric);
     const compatibility = validateServiceCompatibility(canonical);
-    const record: ServiceLifecycleRecord = { service: canonical, state: "DISCOVERED", compatibility, updatedAt: new Date().toISOString(), reason: compatibility.compatible ? undefined : compatibility.errors.join("; ") };
+    const record: ServiceLifecycleRecord = {
+      service: canonical,
+      state: "DISCOVERED",
+      compatibility,
+      updatedAt: new Date().toISOString(),
+      reason: compatibility.compatible ? undefined : compatibility.errors.join("; "),
+    };
     this.records.set(service.id, record);
     stormFireServiceObservability.record({ serviceId: service.id, type: "LIFECYCLE", action: "DISCOVERED", state: record.state, success: true });
     return record;
@@ -59,7 +69,7 @@ export class StormFireServiceLifecycleManager {
     record.updatedAt = new Date().toISOString();
     record.reason = reason;
 
-    const canonical = getCanonicalStormFireService(serviceId);
+    const canonical = stormFireServiceFabric.get(serviceId);
     if (canonical) {
       const status = next === "DISABLED" ? "PAUSED" : next === "QUARANTINED" ? "OFFLINE" : next === "REGISTERED" ? "REGISTERED" : "ACTIVE";
       stormFireServiceFabric.update(serviceId, { status });
@@ -75,8 +85,8 @@ export class StormFireServiceLifecycleManager {
   validate(serviceId: string) {
     const record = this.records.get(serviceId);
     if (!record) throw new Error(`Service has not been discovered: ${serviceId}`);
-    const canonical = getCanonicalStormFireService(serviceId);
-    if (canonical) record.service = fromCanonicalService(canonical);
+    const canonical = canonicalManifest(serviceId);
+    if (canonical) record.service = canonical;
     const compatibility = validateServiceCompatibility(record.service);
     record.compatibility = compatibility;
     stormFireServiceObservability.record({ serviceId, type: "COMPATIBILITY", action: "VALIDATION", success: compatibility.compatible, state: record.state, message: compatibility.errors.join("; ") || compatibility.warnings.join("; ") });
@@ -107,14 +117,14 @@ export class StormFireServiceLifecycleManager {
   get(serviceId: string) {
     const record = this.records.get(serviceId);
     if (!record) return undefined;
-    const canonical = getCanonicalStormFireService(serviceId);
-    return canonical ? { ...record, service: fromCanonicalService(canonical) } : record;
+    const canonical = canonicalManifest(serviceId);
+    return canonical ? { ...record, service: canonical } : record;
   }
 
   list() {
     return [...this.records.values()].map((record) => {
-      const canonical = getCanonicalStormFireService(record.service.id);
-      return canonical ? { ...record, service: fromCanonicalService(canonical) } : record;
+      const canonical = canonicalManifest(record.service.id);
+      return canonical ? { ...record, service: canonical } : record;
     });
   }
 }
