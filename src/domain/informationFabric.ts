@@ -24,8 +24,16 @@ export class InformationFabric {
   private history: StormFireInformationEnvelope[] = [];
   private subscriptions = new Map<string, StormFireSubscription>();
   private readonly idempotency = new EventIdempotencyStore();
+  private persistence?: InformationFabricPersistence;
 
-  constructor(private readonly persistence?: InformationFabricPersistence) {}
+  constructor(persistence?: InformationFabricPersistence) {
+    this.persistence = persistence;
+  }
+
+  async attachPersistence(persistence: InformationFabricPersistence): Promise<void> {
+    this.persistence = persistence;
+    await this.hydrate();
+  }
 
   publish<T>(message: StormFireInformationEnvelope<T>): StormFireInformationEnvelope<T> {
     this.validate(message);
