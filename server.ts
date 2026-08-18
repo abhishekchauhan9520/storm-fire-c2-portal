@@ -31,12 +31,6 @@ if (!isProduction || process.env.STORM_FIRE_BOOTSTRAP_SCENARIO === "true") {
   bootstrapStormFireDevelopmentScenario();
 }
 
-/**
- * Authentication is deliberately a separate boundary from authorization.
- * The current repository contains no production identity provider, so
- * operational participant-scoped endpoints remain disabled in production
- * until an authenticated identity is supplied by an upstream gateway.
- */
 function authenticatedParticipantId(req: Request): string | null {
   if (isProduction) return null;
   const claimed = req.header("x-storm-fire-participant-id");
@@ -244,7 +238,7 @@ async function startServer() {
   } else {
     const distPath = path.join(__dirname, "dist");
     app.use(express.static(distPath));
-    app.get("*", (_req, res) => res.sendFile(path.join(distPath, "index.html"));
+    app.get("*", (_req, res) => res.sendFile(path.join(distPath, "index.html")));
   }
   app.listen(PORT, "0.0.0.0", () => console.log(`[STORM-FIRE] Information runtime operational on port ${PORT}`));
 }
