@@ -132,8 +132,33 @@ app.post("/api/access/decide", (req, res) => {
   const authenticatedId = requireParticipant(req, res);
   if (!authenticatedId) return;
   if (req.body?.participantId !== authenticatedId) return res.status(403).json({ error: "Authorization subject does not match the authenticated identity." });
+
   try {
-    return res.json({ data: stormFireAuthorization.decide(req.body) });
+    const canonicalContext = resolveParticipantOperationalContext(authenticatedId);
+    const informationType = typeof req.body?.informationType === "string" ? req.body.informationType.trim() : "";
+    if (!informationType) return res.status(400).json({ error: "Authorization request requires informationType." });
+
+    const requestedServiceId = typeof req.body?.serviceId === "string" ? req.body.serviceId : undefined;
+    if (requestedServiceId && !canonicalContext.services.some((service) => service.id === requestedServiceId)) {
+      return res.status(403).json({ error: "Requested service is not part of the authenticated participant context." });
+    }
+
+    const request = {
+      requestId: typeof req.body?.requestId === "string" && req.body.requestId.trim() ? req.body.requestId : `access-${Date.now()}`,
+      participantId: authenticatedId,
+      informationType,
+      serviceId: requestedServiceId,
+      organizationIds: canonicalContext.organizationIds,
+      roleIds: canonicalContext.roleIds,
+      relationshipIds: canonicalContext.relationshipIds,
+      geographicScopeIds: canonicalContext.geographicScopeIds,
+      classification: canonicalContext.informationClassification,
+    };
+
+    // All participant, organization, role, relationship, geography and
+    // classification context is reconstructed from the authenticated identity;
+    // client-supplied context claims are intentionally ignored.
+    return res.json({ data: stormFireAuthorization.decide(request) });
   } catch (error) {
     return res.status(400).json({ error: error instanceof Error ? error.message : "Invalid authorization request." });
   }
