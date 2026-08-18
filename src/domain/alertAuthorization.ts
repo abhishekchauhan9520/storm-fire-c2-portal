@@ -16,16 +16,15 @@ export interface AlertAuthorizationResult {
   matchedPolicyIds: Record<string, string[]>;
 }
 
-function resolveRecipientServiceId(
+function eligibleServiceIds(
   requestedServiceId: string | undefined,
   informationType: string,
-  serviceIds: { id: string; informationTypesConsumed: string[]; informationTypesProduced: string[] }[],
-): string | undefined {
-  if (requestedServiceId) return requestedServiceId;
-  return serviceIds.find((service) =>
-    service.informationTypesConsumed.includes(informationType) ||
-    service.informationTypesProduced.includes(informationType),
-  )?.id;
+  services: { id: string; informationTypesConsumed: string[]; informationTypesProduced: string[] }[],
+): string[] {
+  if (requestedServiceId) return [requestedServiceId];
+  return services
+    .filter((service) => service.informationTypesConsumed.includes(informationType) || service.informationTypesProduced.includes(informationType))
+    .map((service) => service.id);
 }
 
 /**
@@ -49,9 +48,10 @@ export function authorizeAlertDissemination(request: AlertAuthorizationRequest):
 
   for (const recipientId of recipients) {
     const recipientContext = resolveParticipantOperationalContext(recipientId);
-    const serviceId = resolveRecipientServiceId(request.serviceId, request.informationObject.kind, recipientContext.services);
-    const decision = stormFireAuthorization.decide({
-      requestId: `alert-${request.informationObject.id}-${recipientId}`,
+    const serviceIds = eligibleServiceIds(request.serviceId, request.informationObject.kind, recipientContext.services);
+    const candidateServiceIds: Array<string | undefined> = serviceIds.length > 0 ? serviceIds : [undefined];
+    const decisions = candidateServiceIds.map((serviceId) => stormFireAuthorization.decide({
+      requestId: `alert-${request.informationObject.id}-${recipientId}${serviceId ? `-${serviceId}` : ""}`,
       participantId: recipientId,
       informationType: request.informationObject.kind,
       serviceId,
@@ -60,10 +60,10 @@ export function authorizeAlertDissemination(request: AlertAuthorizationRequest):
       relationshipIds: recipientContext.relationshipIds,
       geographicScopeIds: recipientContext.geographicScopeIds,
       classification: request.informationObject.classification,
-    });
+    }));
 
-    matchedPolicyIds[recipientId] = [...decision.matchedRuleIds];
-    if (decision.accessDecision.effect === ("ALLOW" as PolicyEffect)) allowedRecipientIds.push(recipientId);
+    matchedPolicyIds[recipientId] = [...new Set(decisions.flatMap((decision) => decision.matchedRuleIds))];
+    if (decisions.some((decision) => decision.accessDecision.effect === ("ALLOW" as PolicyEffect))) allowedRecipientIds.push(recipientId);
     else deniedRecipientIds.push(recipientId);
   }
 
