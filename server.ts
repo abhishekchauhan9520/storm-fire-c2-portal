@@ -87,6 +87,39 @@ app.get("/api/health", (_req, res) => {
 app.get("/api/services", (_req, res) => res.json(stormFireServiceFabric.list()));
 app.use("/api/logistics", requireParticipantMiddleware, logisticsRouter);
 
+app.get("/api/events", (req, res) => {
+  const participantId = requireParticipant(req, res);
+  if (!participantId) return;
+  const data = stormFireInformationFabric
+    .historyFor()
+    .filter((message) => message.kind === "EVENT")
+    .map((message) => ({
+      id: message.id,
+      type: message.type,
+      occurredAt: message.occurredAt,
+      participantId: message.producerParticipantId ?? message.provenance.producerId ?? message.provenance.sourceId,
+    }))
+    .filter((event) => event.participantId === participantId || event.participantId === undefined);
+  res.setHeader("Cache-Control", "no-store, max-age=0");
+  return res.json(data);
+});
+
+app.get("/api/alerts", (req, res) => {
+  const participantId = requireParticipant(req, res);
+  if (!participantId) return;
+  const data = runtime.state.alerts
+    .filter((alert) => alert.recipients.includes(participantId))
+    .map((alert) => ({
+      id: alert.id,
+      severity: alert.severity,
+      state: alert.state,
+      createdAt: alert.createdAt,
+      updatedAt: alert.updatedAt,
+    }));
+  res.setHeader("Cache-Control", "no-store, max-age=0");
+  return res.json(data);
+});
+
 app.get("/api/events/stream", (req, res) => {
   const participantId = requireParticipant(req, res);
   if (!participantId) return;
@@ -241,7 +274,7 @@ async function startServer() {
   } else {
     const distPath = path.join(__dirname, "dist");
     app.use(express.static(distPath));
-    app.get("*", (_req, res) => res.sendFile(path.join(distPath, "index.html")));
+    app.get("*", (_req, res) => res.sendFile(path.join(distPath, "index.html"));
   }
   app.listen(PORT, "0.0.0.0", () => console.log(`[STORM-FIRE] Information runtime operational on port ${PORT}`));
 }
