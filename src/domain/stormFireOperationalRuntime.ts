@@ -1,5 +1,4 @@
 import { stormFireInformationFabric } from "./informationFabric";
-import { stormFireInformationRelationships } from "./informationRelationshipEngine";
 import { ParallelAlertRouter } from "./parallelAlertRouter";
 import { stormFireServiceFabric } from "../service-fabric/serviceFabric";
 
@@ -9,9 +8,9 @@ export interface OperationalDispatchResult {
   recipients: string[];
 }
 
-/** Shared Storm Fire runtime wiring the canonical fabric, relationship policy and service registry together. */
+/** Shared Storm Fire runtime wiring the canonical information fabric and service registry together. */
 export class StormFireOperationalRuntime {
-  readonly alerts = new ParallelAlertRouter(stormFireInformationFabric, stormFireInformationRelationships);
+  readonly alerts = new ParallelAlertRouter(stormFireInformationFabric);
 
   publishAndDispatch<T>(message: import("./informationFabric").StormFireInformationEnvelope<T>, recipients: string[]): OperationalDispatchResult {
     if (message.producerServiceId && !stormFireServiceFabric.get(message.producerServiceId)) {
