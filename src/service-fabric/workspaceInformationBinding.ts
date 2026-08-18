@@ -1,5 +1,6 @@
 import type { CanonicalInformationRecord } from "./informationAdapter";
-import { stormFireInformationFabric } from "./informationFabricBridge";
+import { canonicalEnvelopeToRecord } from "./informationAdapter";
+import { stormFireInformationFabric } from "../domain/informationFabric";
 import { stormFireDisplayFabric } from "./displayFabric";
 import { stormFireWorkspaceFabric } from "./workspaceFabric";
 
@@ -11,7 +12,7 @@ export interface WorkspaceInformationDelivery {
   deliveredAt: string;
 }
 
-/** Connects workspace surfaces to the Information Fabric without creating a second data store. */
+/** Connects workspace surfaces directly to the canonical Information Fabric. */
 export class WorkspaceInformationBinding {
   private deliveries = new Map<string, WorkspaceInformationDelivery>();
   private unsubscribers = new Map<string, () => void>();
@@ -20,7 +21,15 @@ export class WorkspaceInformationBinding {
     this.unbindWorkspace(workspaceId);
     const workspace = stormFireWorkspaceFabric.getWorkspace(workspaceId);
     if (!workspace) throw new Error(`Workspace ${workspaceId} was not found.`);
-    const unsubscribe = stormFireInformationFabric.subscribeParticipant(workspace.participantId, this.workspaceInformationTypes(workspaceId), (record) => this.route(workspaceId, record));
+    const subscriptionId = `workspace-information-${workspaceId}`;
+    stormFireInformationFabric.subscribe({
+      id: subscriptionId,
+      participantId: workspace.participantId,
+      informationTypes: this.workspaceInformationTypes(workspaceId),
+      enabled: true,
+      handler: (message) => this.route(workspaceId, canonicalEnvelopeToRecord(message)),
+    });
+    const unsubscribe = () => stormFireInformationFabric.unsubscribe(subscriptionId);
     this.unsubscribers.set(workspaceId, unsubscribe);
     return () => this.unbindWorkspace(workspaceId);
   }
@@ -45,7 +54,7 @@ export class WorkspaceInformationBinding {
 
   deliveriesFor(workspaceId?: string): WorkspaceInformationDelivery[] { return [...this.deliveries.values()].filter((delivery) => !workspaceId || delivery.workspaceId === workspaceId); }
   unbindWorkspace(workspaceId: string): void { this.unsubscribers.get(workspaceId)?.(); this.unsubscribers.delete(workspaceId); }
-  clear(): void { for (const workspaceId of this.unsubscribers.keys()) this.unbindWorkspace(workspaceId); this.deliveries.clear(); }
+  clear(): void { for (const workspaceId of [...this.unsubscribers.keys()]) this.unbindWorkspace(workspaceId); this.deliveries.clear(); }
 }
 
 export const stormFireWorkspaceInformationBinding = new WorkspaceInformationBinding();
