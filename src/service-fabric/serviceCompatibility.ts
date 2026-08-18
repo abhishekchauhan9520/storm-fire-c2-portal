@@ -1,12 +1,34 @@
-import type { StormFireServiceManifest } from "./serviceRegistry";
+import type { StormFireServiceManifest } from "./serviceManifestAdapter";
 
 export const STORM_FIRE_SERVICE_API_VERSION = "1.0";
 
-export interface ServiceCapabilityDescriptor { id: string; version: string; capabilities: string[]; consumes: string[]; produces: string[]; relationshipAxes: Array<"VERTICAL" | "HORIZONTAL" | "DIAGONAL">; stormFireApiVersion: string; }
-export interface CompatibilityResult { compatible: boolean; errors: string[]; warnings: string[]; descriptor: ServiceCapabilityDescriptor; }
+export interface ServiceCapabilityDescriptor {
+  id: string;
+  version: string;
+  capabilities: string[];
+  consumes: string[];
+  produces: string[];
+  relationshipAxes: Array<"VERTICAL" | "HORIZONTAL" | "DIAGONAL">;
+  stormFireApiVersion: string;
+}
+
+export interface CompatibilityResult {
+  compatible: boolean;
+  errors: string[];
+  warnings: string[];
+  descriptor: ServiceCapabilityDescriptor;
+}
 
 export function discoverServiceCapabilities(manifest: StormFireServiceManifest): ServiceCapabilityDescriptor {
-  return { id: manifest.id, version: manifest.version, capabilities: [...manifest.capabilities], consumes: [...manifest.consumes], produces: [...manifest.produces], relationshipAxes: [...manifest.relationships], stormFireApiVersion: STORM_FIRE_SERVICE_API_VERSION };
+  return {
+    id: manifest.id,
+    version: manifest.version,
+    capabilities: [...manifest.capabilities],
+    consumes: [...manifest.consumes],
+    produces: [...manifest.produces],
+    relationshipAxes: [...manifest.relationships],
+    stormFireApiVersion: STORM_FIRE_SERVICE_API_VERSION,
+  };
 }
 
 export function validateServiceCompatibility(manifest: StormFireServiceManifest, supportedApiVersion = STORM_FIRE_SERVICE_API_VERSION): CompatibilityResult {
