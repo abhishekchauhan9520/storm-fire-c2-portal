@@ -1,4 +1,4 @@
-import { stormFireServiceManifests, registerCanonicalService, type StormFireServiceManifest } from "./serviceManifestAdapter";
+import { stormFireServiceManifests, registerCanonicalService, fromCanonicalService, type StormFireServiceManifest } from "./serviceManifestAdapter";
 import { stormFireServiceLifecycle, type ServiceLifecycleRecord } from "./serviceLifecycle";
 import { stormFireServiceFabric } from "./serviceFabric";
 
@@ -8,12 +8,14 @@ export interface ServiceInventoryEntry extends ServiceLifecycleRecord {
 }
 
 /**
- * Runtime inventory for service manifest/lifecycle tooling.
- * Canonical runtime state remains in Service Fabric; lifecycle records are metadata.
+ * Transitional lifecycle tooling. Service Fabric remains the sole authoritative
+ * service registry; lifecycle records are operational metadata layered on top.
  */
 export class StormFireServiceRegistryRuntime {
-  bootstrap(services: StormFireServiceManifest[] = stormFireServiceManifests): ServiceInventoryEntry[] {
-    return services.map((service) => {
+  bootstrap(services?: StormFireServiceManifest[]): ServiceInventoryEntry[] {
+    const source = services ?? stormFireServiceFabric.list().map(fromCanonicalService);
+    const fallback = source.length > 0 ? source : stormFireServiceManifests;
+    return fallback.map((service) => {
       const errors: string[] = [];
       let registered: StormFireServiceManifest = service;
       try {
@@ -33,11 +35,19 @@ export class StormFireServiceRegistryRuntime {
   }
 
   inventory(): ServiceInventoryEntry[] {
-    return stormFireServiceLifecycle.list().map((record) => ({
-      ...record,
-      contractValid: record.compatibility?.compatible ?? false,
-      contractErrors: record.compatibility?.errors ?? [],
-    }));
+    return stormFireServiceFabric.list().map((service) => {
+      const lifecycle = stormFireServiceLifecycle.get(service.id);
+      return {
+        ...(lifecycle ?? {
+          service: fromCanonicalService(service),
+          state: service.status === "ACTIVE" ? "ENABLED" : service.status === "PAUSED" ? "DISABLED" : "DISCOVERED",
+          updatedAt: new Date().toISOString(),
+        }),
+        service: fromCanonicalService(service),
+        contractValid: lifecycle?.compatibility?.compatible ?? true,
+        contractErrors: lifecycle?.compatibility?.errors ?? [],
+      };
+    });
   }
 }
 
