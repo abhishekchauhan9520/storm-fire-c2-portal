@@ -1,6 +1,7 @@
 import type { Alert, Event, InformationObject, Participant, Service, Workspace } from "../contracts/stormFireContracts";
 import { stormFireOrganizationGraph } from "../domain/organizationGraph";
 import { stormFireParticipantContexts } from "../domain/participantContext";
+import { InformationFabric, stormFireInformationFabric } from "../domain/informationFabric";
 import { stormFireParticipants } from "../service-fabric/participantModel";
 import { stormFireServiceFabric } from "../service-fabric/serviceFabric";
 import { stormFireEventSpine } from "../platform/event-spine/eventSpine";
@@ -17,8 +18,10 @@ export interface StormFireRuntimeState {
 }
 
 /** Runtime composition root; public state is a projection, not authoritative storage. */
-export function createStormFireRuntime(initial: Partial<StormFireRuntimeState> = {}) {
-  const informationObjects = new Map<string, InformationObject>();
+export function createStormFireRuntime(
+  initial: Partial<StormFireRuntimeState> = {},
+  informationFabric: InformationFabric = new InformationFabric(),
+) {
   const events: Event[] = [];
   const alerts = new Map<string, Alert>();
   const relationships = [...(initial.relationships ?? [])];
@@ -52,31 +55,34 @@ export function createStormFireRuntime(initial: Partial<StormFireRuntimeState> =
   const state = {
     get participants() { return stormFireParticipants.list(); },
     relationships,
-    get objects() { return [...informationObjects.values()].map(projectObject); },
+    get objects() { return informationFabric.historyFor().filter((item) => item.kind === "OBJECT").map(projectObject); },
     get events() { return events.map(projectEvent); },
     get alerts() { return [...alerts.values()].map((alert): OperationalAlert => ({ id: alert.id, objectId: alert.objectId ?? "", severity: alert.severity, state: alert.state, createdAt: alert.createdAt, updatedAt: alert.updatedAt, recipients: [...alert.recipientParticipantIds] })); },
     get services() { return stormFireServiceFabric.list(); },
     workspaces,
   } as StormFireRuntimeState;
 
-  for (const object of initial.objects ?? []) informationObjects.set(object.id, {
-    id: object.id,
-    kind: "OBJECT",
-    type: object.kind,
-    schemaVersion: 1,
-    version: object.version,
-    occurredAt: object.timestamp,
-    producerParticipantId: object.sourceParticipantId,
-    classification: object.classification,
-    geographicScopeIds: [],
-    provenance: { sourceId: object.sourceParticipantId, observedAt: object.timestamp, receivedAt: object.timestamp, confidence: object.confidence },
-    payload: object.attributes,
-  });
+  for (const object of initial.objects ?? []) {
+    informationFabric.publish<unknown>({
+      id: object.id,
+      kind: "OBJECT",
+      type: object.kind,
+      schemaVersion: 1,
+      version: object.version,
+      occurredAt: object.timestamp,
+      producerParticipantId: object.sourceParticipantId,
+      classification: object.classification,
+      geographicScopeIds: [],
+      provenance: { sourceId: object.sourceParticipantId, observedAt: object.timestamp, receivedAt: object.timestamp, confidence: object.confidence },
+      payload: object.attributes,
+    });
+  }
 
   return {
     state,
+    informationFabric,
     ingestObject(object: CanonicalOperationalObject) {
-      const current = informationObjects.get(object.id);
+      const current = informationFabric.historyFor().find((item) => item.id === object.id && item.kind === "OBJECT");
       if (current && object.version <= current.version) {
         sequence += 1;
         return projectEvent({
@@ -109,7 +115,7 @@ export function createStormFireRuntime(initial: Partial<StormFireRuntimeState> =
         provenance: { sourceId: object.sourceParticipantId, observedAt: object.timestamp, receivedAt: new Date().toISOString(), confidence: object.confidence },
         payload: object.attributes,
       };
-      informationObjects.set(object.id, canonical);
+      informationFabric.publish(canonical);
 
       sequence += 1;
       const event: Event = {
@@ -155,4 +161,5 @@ export function createStormFireRuntime(initial: Partial<StormFireRuntimeState> =
   };
 }
 
-export const defaultStormFireRuntime = createStormFireRuntime();
+/** Production composition uses the canonical shared Information Fabric. */
+export const defaultStormFireRuntime = createStormFireRuntime({}, stormFireInformationFabric);
