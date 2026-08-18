@@ -14,8 +14,11 @@ export class StormFireOperationalRuntime {
   readonly alerts = new ParallelAlertRouter(stormFireInformationFabric, stormFireInformationRelationships);
 
   publishAndDispatch<T>(message: import("./informationFabric").StormFireInformationEnvelope<T>, recipients: string[]): OperationalDispatchResult {
-    if (!stormFireServiceFabric.get(message.producerServiceId)) {
+    if (message.producerServiceId && !stormFireServiceFabric.get(message.producerServiceId)) {
       throw new Error(`Producer service ${message.producerServiceId} is not registered.`);
+    }
+    if (!message.producerServiceId && !message.producerParticipantId) {
+      throw new Error("Operational information requires a producer service or participant.");
     }
 
     const published = stormFireInformationFabric.publish(message);
