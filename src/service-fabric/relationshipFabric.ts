@@ -26,6 +26,7 @@ function project(relationship: StormFireInformationRelationship): StormFireInfor
 /**
  * Compatibility facade for older service-fabric callers. The domain
  * InformationRelationshipEngine is the only authoritative relationship store.
+ * Initialization is deliberately explicit; this module has no import-time side effects.
  */
 class RelationshipFabric {
   establish(input: Omit<StormFireInformationRelationshipProjection, "id">): StormFireInformationRelationshipProjection {
@@ -59,27 +60,3 @@ class RelationshipFabric {
 }
 
 export const stormFireRelationshipFabric = new RelationshipFabric();
-
-stormFireRelationshipFabric.establish({
-  sourceParticipantId: "operator-command",
-  targetParticipantId: "operator-intel",
-  axis: "HORIZONTAL",
-  informationTypes: ["Observation", "Assessment", "Alert"],
-  enabled: true,
-});
-
-stormFireRelationshipFabric.establish({
-  sourceParticipantId: "operator-command",
-  targetParticipantId: "uav-service",
-  axis: "VERTICAL",
-  informationTypes: ["Task", "Track", "Telemetry", "Alert"],
-  enabled: true,
-});
-
-stormFireRelationshipFabric.establish({
-  sourceParticipantId: "operator-intel",
-  targetParticipantId: "logistics-service",
-  axis: "DIAGONAL",
-  informationTypes: ["Context", "Requirement", "Alert"],
-  enabled: true,
-});
