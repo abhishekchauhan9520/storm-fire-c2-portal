@@ -1,5 +1,5 @@
-import type { CanonicalInformationRecord } from "./informationAdapter";
-import { stormFireInformationFabric } from "../domain/informationFabric";
+import { canonicalEnvelopeToRecord, type CanonicalInformationRecord } from "./informationAdapter";
+import { stormFireInformationFabric, type StormFireInformationEnvelope } from "../domain/informationFabric";
 import { stormFireWorkspaceFabric } from "./workspaceFabric";
 import { stormFireDisplayFabric } from "./displayFabric";
 
@@ -19,7 +19,7 @@ export class WorkspaceAlertRouter {
       participantId: "system",
       informationTypes: ["ALERT", "SERVICE_EVENT"],
       enabled: true,
-      handler: (message) => this.route(message),
+      handler: (message: StormFireInformationEnvelope) => this.route(canonicalEnvelopeToRecord(message)),
     });
     this.unsubscribe = () => stormFireInformationFabric.unsubscribe(subscriptionId);
   }
