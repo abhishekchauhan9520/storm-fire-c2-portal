@@ -7,8 +7,6 @@ interface KillChainModuleProps {
   selectedTrack: TacticalTrack | null;
   onAdvanceKillChain: (nextState: KillChainState) => void;
   killChainState: KillChainState;
-  /** Compatibility prop retained during migration; no strike action is invoked. */
-  onTriggerStrike?: (option: string) => void;
   onAddLog: (log: Omit<TacticalLog, "id" | "timestamp">) => void;
 }
 
