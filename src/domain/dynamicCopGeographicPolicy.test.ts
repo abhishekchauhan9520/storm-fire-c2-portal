@@ -26,7 +26,7 @@ test("Dynamic COP visibility evaluates both relationship authorization and geome
       fromParticipantId: "company-cdr",
       toParticipantId: "brigade-cdr",
       direction: "VERTICAL",
-      informationTypes: ["LOGISTICS_READINESS_CHANGED"],
+      allowedInformationTypes: ["LOGISTICS_READINESS_CHANGED"],
       enabled: true,
     });
   }
