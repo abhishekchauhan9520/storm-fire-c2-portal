@@ -1,5 +1,4 @@
 import { InformationFabric, StormFireInformationEnvelope } from "./informationFabric";
-import { InformationRelationshipEngine, stormFireInformationRelationships } from "./informationRelationshipEngine";
 
 export interface AlertRecipient {
   participantId: string;
@@ -12,22 +11,20 @@ export interface ParallelAlertDispatch {
   recipients: AlertRecipient[];
 }
 
-/** Routes one alert to multiple authorized participants in parallel. */
+/**
+ * Disseminates an already-authorized alert to its selected participants.
+ * Authorization is deliberately not reimplemented here: callers must use the
+ * canonical participant/policy boundary before invoking this transport path.
+ */
 export class ParallelAlertRouter {
-  constructor(private readonly fabric: InformationFabric, private readonly relationships: InformationRelationshipEngine) {}
+  constructor(private readonly fabric: InformationFabric) {}
 
   dispatch<T>(alert: StormFireInformationEnvelope<T>, recipients: string[]): ParallelAlertDispatch {
     const uniqueRecipients = [...new Set(recipients)].filter(Boolean);
     const deliveredAt = new Date().toISOString();
-    const delivered: AlertRecipient[] = [];
-
-    for (const participantId of uniqueRecipients) {
-      if (alert.producerParticipantId && !this.relationships.canShare(alert.producerParticipantId, participantId, alert.type)) continue;
-      delivered.push({ participantId, deliveredAt });
-    }
-
+    const delivered: AlertRecipient[] = uniqueRecipients.map((participantId) => ({ participantId, deliveredAt }));
     return { alert, recipients: delivered };
   }
 }
 
-export const createParallelAlertRouter = (fabric: InformationFabric, relationships = stormFireInformationRelationships) => new ParallelAlertRouter(fabric, relationships);
+export const createParallelAlertRouter = (fabric: InformationFabric) => new ParallelAlertRouter(fabric);
