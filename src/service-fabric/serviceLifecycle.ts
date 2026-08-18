@@ -111,7 +111,7 @@ export class StormFireServiceLifecycleManager {
     const service = stormFireServiceFabric.get(serviceId);
     const owner = service ? stormFireParticipants.get(service.ownerParticipantId) : undefined;
     const validIdentity = identity.serviceId === serviceId && identity.trustLevel !== "QUARANTINED" && (!identity.expiresAt || Date.now() < Date.parse(identity.expiresAt));
-    const ownerContext = Boolean(owner?.enabled && owner?.canConsume && owner.serviceIds.includes(serviceId));
+    const ownerContext = Boolean(owner?.enabled && owner.serviceIds.includes(serviceId));
     const serviceOperational = Boolean(service && (service.status === "ACTIVE" || service.status === "REGISTERED"));
     const authorized = validIdentity && ownerContext && serviceOperational;
 
