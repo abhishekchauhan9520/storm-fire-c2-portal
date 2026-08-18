@@ -1,16 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
-import { TacticalTrack, CommandSystem } from "../types";
+import { TacticalTrack } from "../types";
 import { projectCopTracks, fetchDynamicCop } from "../platform-client/dynamicCopClient";
 import { MapPin, Compass, Target, Activity, AlertTriangle } from "lucide-react";
 
 interface TacticalMapProps {
-  // Retained for migration compatibility. Canonical COP data is authoritative.
-  tracks: TacticalTrack[];
   onSelectTrack: (track: TacticalTrack | null) => void;
   selectedTrack: TacticalTrack | null;
-  activeStrike: { sourceX: number; sourceY: number; targetX: number; targetY: number; stage: string } | null;
   insightMode: "NORMAL" | "DEAD_GROUND" | "TRAFFICABILITY";
-  systems?: CommandSystem[];
 }
 
 export default function TacticalMap({ onSelectTrack, selectedTrack, insightMode }: TacticalMapProps) {
