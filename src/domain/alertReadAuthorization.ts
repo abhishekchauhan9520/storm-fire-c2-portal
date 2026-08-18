@@ -8,6 +8,18 @@ export interface AlertReadDecision {
   matchedPolicyIds: string[];
 }
 
+function resolveRecipientServiceId(
+  requestedServiceId: string | undefined,
+  informationType: string,
+  services: { id: string; informationTypesConsumed: string[]; informationTypesProduced: string[] }[],
+): string | undefined {
+  if (requestedServiceId) return requestedServiceId;
+  return services.find((service) =>
+    service.informationTypesConsumed.includes(informationType) ||
+    service.informationTypesProduced.includes(informationType),
+  )?.id;
+}
+
 /**
  * Canonical read-side alert authorization. Alert recipient lists are treated
  * as dissemination evidence, not as an independent source of authority.
@@ -27,11 +39,12 @@ export function authorizeAlertRead(
     return { allowed: false, reason: "Participant context does not contain the requested alert service.", matchedPolicyIds: [] };
   }
 
+  const resolvedServiceId = resolveRecipientServiceId(serviceId, informationObject.kind, context.services);
   const decision = stormFireAuthorization.decide({
     requestId: `alert-read-${alert.id}-${participantId}`,
     participantId,
     informationType: informationObject.kind,
-    serviceId,
+    serviceId: resolvedServiceId,
     organizationIds: context.organizationIds,
     roleIds: context.roleIds,
     relationshipIds: context.relationshipIds,
