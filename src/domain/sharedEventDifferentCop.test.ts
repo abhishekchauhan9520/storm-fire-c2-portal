@@ -16,7 +16,7 @@ test("one canonical event can produce different participant COP projections", ()
       fromParticipantId: "uav-service",
       toParticipantId: "operator-command",
       direction: "VERTICAL",
-      informationTypes: ["Track"],
+      allowedInformationTypes: ["Track"],
       enabled: true,
     });
   }
