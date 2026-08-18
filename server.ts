@@ -3,13 +3,13 @@ import path from "path";
 import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import { createStormFireRuntime } from "./src/core/stormFireRuntime";
-import { stormFireInformationFabric } from "./src/domain/informationFabric";
-import { FileInformationFabricPersistence } from "./src/platform/persistence/informationFabricPersistence";
 import { stormFireAuthorization } from "./src/domain/authorizationPolicy";
 import { authorizeAlertDissemination } from "./src/domain/alertAuthorization";
 import { buildDynamicCopFromFabric } from "./src/domain/dynamicCopFromFabric";
 import { resolveParticipantOperationalContext } from "./src/domain/participantOperationalContext";
 import { buildStormFireAdvisoryContext, generateBoundedAdvisory } from "./src/domain/aiDecisionSupport";
+import { stormFireInformationFabric } from "./src/domain/informationFabric";
+import { FileInformationFabricPersistence } from "./src/platform/persistence/informationFabricPersistence";
 import { logisticsRouter } from "./src/services/logistics/logisticsApi";
 import { logisticsRepositoryReady, logisticsService as stormFireLogisticsService } from "./src/services/logistics/logisticsContainer";
 import { bootstrapStormFireDevelopmentScenario } from "./src/platform/stormFireBootstrap";
@@ -28,6 +28,10 @@ const runtime = createStormFireRuntime({}, stormFireInformationFabric);
 const isProduction = process.env.NODE_ENV === "production";
 const developmentParticipantId = process.env.STORM_FIRE_DEV_PARTICIPANT_ID || "operator-command";
 app.use(express.json({ limit: "1mb" }));
+
+if (!isProduction || process.env.STORM_FIRE_BOOTSTRAP_SCENARIO === "true") {
+  bootstrapStormFireDevelopmentScenario();
+}
 
 function authenticatedParticipantId(req: Request): string | null {
   if (isProduction) return null;
@@ -230,9 +234,6 @@ const __dirname = path.dirname(__filename);
 async function startServer() {
   await logisticsRepositoryReady;
   await stormFireInformationFabric.attachPersistence(new FileInformationFabricPersistence());
-  if (!isProduction || process.env.STORM_FIRE_BOOTSTRAP_SCENARIO === "true") {
-    bootstrapStormFireDevelopmentScenario();
-  }
   if (!isProduction) {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
