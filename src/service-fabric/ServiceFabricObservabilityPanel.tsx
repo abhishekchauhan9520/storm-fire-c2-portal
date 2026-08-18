@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import type { StormFireServiceManifest } from "./serviceRegistry";
+import type { StormFireServiceManifest } from "./serviceManifestAdapter";
 import { stormFireServiceLifecycle } from "./serviceLifecycle";
 import { stormFireServiceDiscovery } from "./serviceDiscovery";
 import { stormFireServiceObservability } from "./serviceObservability";

@@ -1,26 +1,52 @@
-import { InformationPolicyRegistry } from "../../domain/informationPolicy";
-import { InformationRelationshipRegistry } from "../../domain/informationRelationships";
+import assert from "node:assert/strict";
+import test from "node:test";
+import { stormFireAuthorization } from "../../domain/authorizationPolicy";
+import { stormFireInformationRelationships } from "../../domain/informationRelationshipEngine";
 import { LogisticsService } from "./logisticsService";
 import { LogisticsWorkflow } from "./logisticsWorkflow";
 
-describe("LogisticsWorkflow", () => {
-  it("creates a canonical request and distributes a critical alert only to authorized recipients", () => {
-    const logistics = new LogisticsService();
-    logistics.registerResource({ id: "fuel-1", name: "Fuel", kind: "FUEL", quantity: 100, unit: "L", readiness: "READY" });
+test("LogisticsWorkflow distributes a critical alert only to authorized recipients", async () => {
+  const logistics = new LogisticsService();
+  logistics.registerResource({ id: "fuel-1", name: "Fuel", kind: "FUEL", quantity: 100, unit: "L", readiness: "READY" });
 
-    const policies = new InformationPolicyRegistry();
-    policies.add({ id: "logistics-alert", informationTypes: ["logistics.alert"], enabled: true });
+  stormFireAuthorization.clear();
+  const policies = [
+    { id: "logistics-alert-brigade", participantIds: ["brigade-a"], relationshipIds: ["vertical-1"], informationTypes: ["logistics.alert"] },
+    { id: "logistics-alert-company", participantIds: ["company-b"], relationshipIds: ["horizontal-1"], informationTypes: ["logistics.alert"] },
+    { id: "logistics-alert-ew", participantIds: ["ew-a"], relationshipIds: ["diagonal-1"], informationTypes: ["logistics.alert"] },
+  ];
+  for (const policy of policies) {
+    stormFireAuthorization.register({ ...policy, version: 1, effect: "ALLOW", priority: 100, enabled: true });
+  }
 
-    const relationships = new InformationRelationshipRegistry();
-    relationships.add({ id: "vertical-1", fromParticipantId: "company-a", toParticipantId: "brigade-a", type: "VERTICAL", informationTypes: ["logistics.alert"], enabled: true });
-    relationships.add({ id: "horizontal-1", fromParticipantId: "company-a", toParticipantId: "company-b", type: "HORIZONTAL", informationTypes: ["logistics.alert"], enabled: true });
-    relationships.add({ id: "diagonal-1", fromParticipantId: "company-a", toParticipantId: "ew-a", type: "DIAGONAL", informationTypes: ["logistics.alert"], enabled: true });
+  const existingIds = new Set(stormFireInformationRelationships.list().map((relationship) => relationship.id));
+  const seed = [
+    { id: "vertical-1", fromParticipantId: "company-a", toParticipantId: "brigade-a", direction: "VERTICAL" as const },
+    { id: "horizontal-1", fromParticipantId: "company-a", toParticipantId: "company-b", direction: "HORIZONTAL" as const },
+    { id: "diagonal-1", fromParticipantId: "company-a", toParticipantId: "ew-a", direction: "DIAGONAL" as const },
+  ];
 
-    const workflow = new LogisticsWorkflow(logistics, policies, relationships);
-    const result = workflow.createAndDistributeRequest({ id: "req-1", requesterParticipantId: "company-a", resourceId: "fuel-1", quantity: 20, priority: "CRITICAL" }, ["brigade-a", "company-b", "ew-a", "unauthorized"], ["logistics-alert"]);
+  for (const relationship of seed) {
+    if (!existingIds.has(relationship.id)) {
+      stormFireInformationRelationships.register({
+        ...relationship,
+        allowedInformationTypes: ["logistics.alert"],
+        enabled: true,
+      });
+    }
+  }
 
-    expect(result.request.status).toBe("OPEN");
-    expect(result.alert?.recipientIds.sort()).toEqual(["brigade-a", "company-b", "ew-a"].sort());
-    expect(result.alert?.rejectedRecipientIds).toContain("unauthorized");
-  });
+  const workflow = new LogisticsWorkflow(logistics, stormFireInformationRelationships);
+  const result = await workflow.createAndDistributeRequest(
+    { id: "req-1", requesterParticipantId: "company-a", resourceId: "fuel-1", quantity: 20, priority: "CRITICAL" },
+    ["brigade-a", "company-b", "ew-a", "unauthorized"],
+    policies.map((policy) => policy.id),
+  );
+
+  assert.equal(result.request.status, "OPEN");
+  assert.equal(result.requestPublished, true);
+  assert.deepEqual(result.alert?.recipientIds.sort(), ["brigade-a", "company-b", "ew-a"].sort());
+  assert.equal(result.alert?.rejectedRecipientIds.includes("unauthorized"), true);
+
+  stormFireAuthorization.clear();
 });

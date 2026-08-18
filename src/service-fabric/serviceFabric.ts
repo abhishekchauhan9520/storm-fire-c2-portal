@@ -1,31 +1,88 @@
+import type { Service, ServiceStatus } from "../contracts/stormFireContracts";
 import { stormFireDisplayFabric } from "./displayFabric";
 
-export type ServiceStatus = "REGISTERED" | "ACTIVE" | "PAUSED" | "OFFLINE";
-export interface StormFireServiceManifest {
-  id: string; name: string; version: string; description?: string;
-  capabilities: string[]; informationTypesProduced: string[]; informationTypesConsumed: string[];
-  displaySurfaceIds?: string[]; status: ServiceStatus; ownerParticipantId: string;
-}
+export type StormFireServiceManifest = Service;
 
-/** Services participate in the shared information environment; they do not create isolated operational data fabrics. */
+/**
+ * Canonical Service Fabric registry. Services advertise capabilities and
+ * information contracts; they do not own an isolated operational state model.
+ */
 export class ServiceFabric {
-  private services = new Map<string, StormFireServiceManifest>();
-  register(manifest: StormFireServiceManifest): StormFireServiceManifest {
+  private services = new Map<string, Service>();
+
+  register(manifest: Service): Service {
+    if (!manifest.id || !manifest.name || !manifest.version) throw new Error("Service requires id, name and version.");
     if (this.services.has(manifest.id)) throw new Error(`Service ${manifest.id} is already registered.`);
-    const normalized = { ...manifest, capabilities: [...manifest.capabilities], informationTypesProduced: [...manifest.informationTypesProduced], informationTypesConsumed: [...manifest.informationTypesConsumed], displaySurfaceIds: [...(manifest.displaySurfaceIds ?? [])] };
-    this.services.set(manifest.id, normalized); return this.get(manifest.id)!;
+    const normalized = this.clone(manifest);
+    this.services.set(manifest.id, normalized);
+    return this.clone(normalized);
   }
+
+  update(id: string, patch: Partial<Service>): Service {
+    const current = this.require(id);
+    const next = this.clone({ ...current, ...patch, id: current.id });
+    this.services.set(id, next);
+    return this.clone(next);
+  }
+
   activate(id: string): boolean { return this.setStatus(id, "ACTIVE"); }
   pause(id: string): boolean { return this.setStatus(id, "PAUSED"); }
   offline(id: string): boolean { return this.setStatus(id, "OFFLINE"); }
-  get(id: string): StormFireServiceManifest | undefined { const s = this.services.get(id); return s ? this.copy(s) : undefined; }
-  list(status?: ServiceStatus): StormFireServiceManifest[] { return [...this.services.values()].filter(s => !status || s.status === status).map(s => this.copy(s)); }
-  consumersOf(type: string): StormFireServiceManifest[] { return this.list("ACTIVE").filter(s => s.informationTypesConsumed.includes(type)); }
-  producersOf(type: string): StormFireServiceManifest[] { return this.list("ACTIVE").filter(s => s.informationTypesProduced.includes(type)); }
-  canUseDisplay(serviceId: string, surfaceId: string): boolean { const s = this.services.get(serviceId); return !!s && s.status === "ACTIVE" && s.displaySurfaceIds?.includes(surfaceId) === true && !!stormFireDisplayFabric.getSurface(surfaceId); }
-  hasInformationPath(serviceId: string, type: string): boolean { const s = this.services.get(serviceId); return !!s && s.status === "ACTIVE" && (s.informationTypesProduced.includes(type) || s.informationTypesConsumed.includes(type)); }
+
+  get(id: string): Service | undefined {
+    const service = this.services.get(id);
+    return service ? this.clone(service) : undefined;
+  }
+
+  list(status?: ServiceStatus): Service[] {
+    return [...this.services.values()]
+      .filter((service) => !status || service.status === status)
+      .map((service) => this.clone(service));
+  }
+
+  consumersOf(type: string): Service[] {
+    return this.list("ACTIVE").filter((service) => service.informationTypesConsumed.includes(type));
+  }
+
+  producersOf(type: string): Service[] {
+    return this.list("ACTIVE").filter((service) => service.informationTypesProduced.includes(type));
+  }
+
+  canUseDisplay(serviceId: string, surfaceId: string): boolean {
+    const service = this.services.get(serviceId);
+    return Boolean(service && service.status === "ACTIVE" && service.displaySurfaceIds.includes(surfaceId) && stormFireDisplayFabric.getSurface(surfaceId));
+  }
+
+  hasInformationPath(serviceId: string, type: string): boolean {
+    const service = this.services.get(serviceId);
+    return Boolean(service && service.status === "ACTIVE" && (service.informationTypesProduced.includes(type) || service.informationTypesConsumed.includes(type)));
+  }
+
   clear(): void { this.services.clear(); }
-  private setStatus(id: string, status: ServiceStatus): boolean { const s = this.services.get(id); if (!s) return false; s.status = status; return true; }
-  private copy(s: StormFireServiceManifest): StormFireServiceManifest { return { ...s, capabilities: [...s.capabilities], informationTypesProduced: [...s.informationTypesProduced], informationTypesConsumed: [...s.informationTypesConsumed], displaySurfaceIds: [...(s.displaySurfaceIds ?? [])] }; }
+
+  private require(id: string): Service {
+    const service = this.services.get(id);
+    if (!service) throw new Error(`Service ${id} was not found.`);
+    return service;
+  }
+
+  private setStatus(id: string, status: ServiceStatus): boolean {
+    const service = this.services.get(id);
+    if (!service) return false;
+    service.status = status;
+    return true;
+  }
+
+  private clone(service: Service): Service {
+    return {
+      ...service,
+      capabilities: service.capabilities.map((capability) => ({ ...capability })),
+      informationTypesProduced: [...service.informationTypesProduced],
+      informationTypesConsumed: [...service.informationTypesConsumed],
+      displaySurfaceIds: [...service.displaySurfaceIds],
+      dependencyServiceIds: [...service.dependencyServiceIds],
+    };
+  }
 }
+
 export const stormFireServiceFabric = new ServiceFabric();

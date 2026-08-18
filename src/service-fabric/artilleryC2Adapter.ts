@@ -1,5 +1,5 @@
 import { BaseStormFireServiceAdapter } from "./serviceAdapter";
-import type { StormFireServiceManifest } from "./serviceRegistry";
+import type { StormFireServiceManifest } from "./serviceManifestAdapter";
 import type { StormFireEvent } from "./serviceEventBus";
 import type { AlertPriority } from "./parallelAlertFabric";
 

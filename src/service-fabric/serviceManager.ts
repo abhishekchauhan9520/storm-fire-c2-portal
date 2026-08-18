@@ -1,5 +1,5 @@
 import type { ServiceAdapter, ServiceAdapterFactory } from "./serviceAdapter";
-import type { StormFireServiceManifest } from "./serviceRegistry";
+import type { StormFireServiceManifest } from "./serviceManifestAdapter";
 import { stormFireServiceLifecycle } from "./serviceLifecycle";
 import { stormFireServiceDiscovery, type ServiceDiscoveryRecord } from "./serviceDiscovery";
 import { stormFireServiceObservability } from "./serviceObservability";

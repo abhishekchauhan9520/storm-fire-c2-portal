@@ -1,4 +1,4 @@
-import type { StormFireServiceManifest } from "./serviceRegistry";
+import type { StormFireServiceManifest } from "./serviceManifestAdapter";
 
 export const STORM_FIRE_SERVICE_API_VERSION = "1.0";
 
@@ -26,30 +26,19 @@ export function discoverServiceCapabilities(manifest: StormFireServiceManifest):
     capabilities: [...manifest.capabilities],
     consumes: [...manifest.consumes],
     produces: [...manifest.produces],
-    relationshipAxes: [...manifest.relationshipAxes],
+    relationshipAxes: [...manifest.relationships],
     stormFireApiVersion: STORM_FIRE_SERVICE_API_VERSION,
   };
 }
 
-export function validateServiceCompatibility(
-  manifest: StormFireServiceManifest,
-  supportedApiVersion = STORM_FIRE_SERVICE_API_VERSION,
-): CompatibilityResult {
+export function validateServiceCompatibility(manifest: StormFireServiceManifest, supportedApiVersion = STORM_FIRE_SERVICE_API_VERSION): CompatibilityResult {
   const descriptor = discoverServiceCapabilities(manifest);
   const errors: string[] = [];
   const warnings: string[] = [];
-
   if (!manifest.id || !manifest.name || !manifest.version) errors.push("Service identity/version is incomplete.");
   if (manifest.capabilities.length === 0) errors.push("Service declares no capabilities.");
-  if (descriptor.stormFireApiVersion !== supportedApiVersion) {
-    errors.push(`Unsupported Storm Fire service API version: ${descriptor.stormFireApiVersion}`);
-  }
-  if (manifest.consumes.length === 0 && manifest.produces.length === 0) {
-    warnings.push("Service neither consumes nor produces declared information classes.");
-  }
-  if (manifest.relationshipAxes.length === 0) {
-    warnings.push("Service declares no relationship axes.");
-  }
-
+  if (descriptor.stormFireApiVersion !== supportedApiVersion) errors.push(`Unsupported Storm Fire service API version: ${descriptor.stormFireApiVersion}`);
+  if (manifest.consumes.length === 0 && manifest.produces.length === 0) warnings.push("Service neither consumes nor produces declared information classes.");
+  if (manifest.relationships.length === 0) warnings.push("Service declares no relationship axes.");
   return { compatible: errors.length === 0, errors, warnings, descriptor };
 }

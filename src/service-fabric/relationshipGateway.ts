@@ -1,4 +1,4 @@
-import type { StormFireServiceManifest, RelationshipAxis } from "./serviceRegistry";
+import type { StormFireServiceManifest, RelationshipAxis } from "./serviceManifestAdapter";
 import { stormFireRelationshipEngine, type StormFireRelationship } from "./relationshipEngine";
 
 export interface RelationshipRequest {

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { ShieldCheck, Network, Bell, Activity, Lock, Users } from "lucide-react";
-import type { StormFireServiceManifest } from "./serviceRegistry";
+import type { StormFireServiceManifest } from "./serviceManifestAdapter";
 import { stormFirePolicyEngine, type ServiceIdentity, type ServicePolicy } from "./servicePolicy";
 import { stormFireRelationshipEngine } from "./relationshipEngine";
 import { parallelAlertFabric, type ParallelAlertPolicy } from "./parallelAlertFabric";

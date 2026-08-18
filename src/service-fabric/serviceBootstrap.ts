@@ -1,6 +1,6 @@
 import { stormFireServiceManager } from "./serviceManager";
 import { ArtilleryC2ServiceAdapter } from "./artilleryC2Adapter";
-import type { StormFireServiceManifest } from "./serviceRegistry";
+import type { StormFireServiceManifest } from "./serviceManifestAdapter";
 
 /**
  * Registers domain adapters with the generic Service Fabric manager.

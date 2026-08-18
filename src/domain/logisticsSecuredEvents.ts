@@ -1,13 +1,9 @@
 import { stormFireSecuredInformationFabric } from "./securedInformationFabric";
+import type { InformationClassification } from "../contracts/stormFireContracts";
 import type { StormFireLogisticsAssetReadiness } from "./logisticsReadiness";
 import type { StormFireLogisticsMovement } from "./logisticsTransport";
 
-export interface StormFireLogisticsRecipient { participantId: string; serviceId: string; geographicScopeId: string; informationPoint?: { latitude: number; longitude: number }; classification?: string; }
-
-export function publishSecuredLogisticsReadiness(asset: StormFireLogisticsAssetReadiness, occurredAt: string, recipients: StormFireLogisticsRecipient[]) {
-  return stormFireSecuredInformationFabric.publishToParticipants({ id: `logistics-readiness:${asset.assetId}:${occurredAt}`, kind: "EVENT", type: "LOGISTICS_READINESS_CHANGED", version: 1, occurredAt, producerServiceId: "logistics", producerParticipantId: asset.ownerParticipantId, provenance: { sourceId: asset.assetId, observedAt: occurredAt, receivedAt: occurredAt }, payload: asset }, recipients);
-}
-
-export function publishSecuredLogisticsMovement(movement: StormFireLogisticsMovement, sourceParticipantId: string, recipients: StormFireLogisticsRecipient[]) {
-  return stormFireSecuredInformationFabric.publishToParticipants({ id: `logistics-movement:${movement.id}:${movement.updatedAt}`, kind: "EVENT", type: "LOGISTICS_MOVEMENT_CHANGED", version: 1, occurredAt: movement.updatedAt, producerServiceId: "logistics", producerParticipantId: sourceParticipantId, provenance: { sourceId: movement.id, observedAt: movement.updatedAt, receivedAt: movement.updatedAt }, payload: movement }, recipients);
-}
+export interface StormFireLogisticsRecipient { participantId: string; serviceId: string; geographicScopeId: string; informationPoint?: { latitude: number; longitude: number }; classification?: InformationClassification; }
+const envelope = <T>(id: string, type: string, occurredAt: string, participantId: string, sourceId: string, payload: T) => ({ id, kind: "EVENT" as const, type, schemaVersion: 1, version: 1, occurredAt, producerServiceId: "logistics", producerParticipantId: participantId, classification: "CONTROLLED" as const, geographicScopeIds: [], provenance: { sourceId, observedAt: occurredAt, receivedAt: occurredAt }, payload });
+export function publishSecuredLogisticsReadiness(asset: StormFireLogisticsAssetReadiness, occurredAt: string, recipients: StormFireLogisticsRecipient[]) { return stormFireSecuredInformationFabric.publishToParticipants(envelope(`logistics-readiness:${asset.assetId}:${occurredAt}`, "LOGISTICS_READINESS_CHANGED", occurredAt, asset.ownerParticipantId, asset.assetId, asset), recipients); }
+export function publishSecuredLogisticsMovement(movement: StormFireLogisticsMovement, sourceParticipantId: string, recipients: StormFireLogisticsRecipient[]) { return stormFireSecuredInformationFabric.publishToParticipants(envelope(`logistics-movement:${movement.id}:${movement.updatedAt}`, "LOGISTICS_MOVEMENT_CHANGED", movement.updatedAt, sourceParticipantId, movement.id, movement), recipients); }

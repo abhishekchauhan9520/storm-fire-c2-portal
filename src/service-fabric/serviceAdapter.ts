@@ -1,5 +1,5 @@
-import type { StormFireServiceManifest } from "./serviceRegistry";
-import type { CanonicalInformationRecord } from "./informationFabricBridge";
+import type { StormFireServiceManifest } from "./serviceManifestAdapter";
+import type { CanonicalInformationRecord } from "./informationAdapter";
 import type { StormFireEvent } from "./serviceEventBus";
 import type { AlertPriority, ParallelAlertResult } from "./parallelAlertFabric";
 import type { StormFireRelationship } from "./relationshipEngine";
@@ -8,9 +8,7 @@ import { stormFireServiceGateway } from "./serviceGateway";
 import { connectRelationship } from "./relationshipGateway";
 import { parallelAlertFabric } from "./parallelAlertFabric";
 
-export interface ServiceAdapterContext {
-  manifest: StormFireServiceManifest;
-}
+export interface ServiceAdapterContext { manifest: StormFireServiceManifest; }
 
 export interface ServiceAdapter {
   readonly context: ServiceAdapterContext;
@@ -22,17 +20,10 @@ export interface ServiceAdapter {
   alert(event: StormFireEvent, priority: AlertPriority): ParallelAlertResult;
 }
 
-/**
- * Generic adapter base. Domain-specific adapters should translate their
- * external protocol/data model into this contract; they should not reach
- * directly into Storm Fire UI state.
- */
+/** Generic service adapter boundary over canonical platform services. */
 export abstract class BaseStormFireServiceAdapter implements ServiceAdapter {
   readonly context: ServiceAdapterContext;
-
-  protected constructor(manifest: StormFireServiceManifest) {
-    this.context = { manifest };
-  }
+  protected constructor(manifest: StormFireServiceManifest) { this.context = { manifest }; }
 
   install(): void {
     const id = this.context.manifest.id;
@@ -42,37 +33,17 @@ export abstract class BaseStormFireServiceAdapter implements ServiceAdapter {
     if (stormFireServiceLifecycle.get(id)?.state === "REGISTERED") stormFireServiceLifecycle.validate(id);
   }
 
-  consume(query = {}) {
-    return stormFireServiceGateway.query(this.context.manifest, query);
-  }
-
+  consume(query = {}) { return stormFireServiceGateway.query(this.context.manifest, query); }
   contribute(kind: string, payload: Record<string, unknown>, relationships: string[] = []) {
-    return stormFireServiceGateway.contribute(this.context.manifest, {
-      kind,
-      source: this.context.manifest.id,
-      payload,
-      relationships,
-    });
+    return stormFireServiceGateway.contribute(this.context.manifest, { kind, source: this.context.manifest.id, payload, relationships });
   }
-
   publish(type: StormFireEvent["type"], payload: unknown, recipients: string[]) {
     return stormFireServiceGateway.publish(this.context.manifest, { type, payload, recipients });
   }
-
   relate(participantId: string, axis: "VERTICAL" | "HORIZONTAL" | "DIAGONAL", relation = "INFORMATION_LINK") {
-    return connectRelationship(this.context.manifest, {
-      from: this.context.manifest.id,
-      to: participantId,
-      axis,
-      relation,
-    });
+    return connectRelationship(this.context.manifest, { from: this.context.manifest.id, to: participantId, axis, relation });
   }
-
-  alert(event: StormFireEvent, priority: AlertPriority) {
-    return parallelAlertFabric.dispatch(event, priority);
-  }
+  alert(event: StormFireEvent, priority: AlertPriority) { return parallelAlertFabric.dispatch(event, priority); }
 }
 
-export type ServiceAdapterFactory<T extends ServiceAdapter = ServiceAdapter> = (
-  manifest: StormFireServiceManifest,
-) => T;
+export type ServiceAdapterFactory<T extends ServiceAdapter = ServiceAdapter> = (manifest: StormFireServiceManifest) => T;

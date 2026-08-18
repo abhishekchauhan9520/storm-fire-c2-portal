@@ -1,3 +1,4 @@
+import type { InformationObject } from "../contracts/stormFireContracts";
 import type { CommandSystem, TacticalNode, TacticalTrack } from "../types";
 import { stormFireEventBus, type StormFireEvent } from "./serviceEventBus";
 
@@ -70,6 +71,32 @@ export function serviceEventToCanonical(event: StormFireEvent): CanonicalInforma
     relationships: event.recipients.map((recipient) => ({ targetId: recipient, relation: "AUTHORIZED_CONSUMER" })),
     version: 1,
     provenance: provenance(event.sourceService, event.timestamp),
+  };
+}
+
+export function canonicalEnvelopeToRecord(envelope: InformationObject): CanonicalInformationRecord {
+  const kind = envelope.type as CanonicalInformationKind;
+  return {
+    id: envelope.id,
+    kind,
+    source: envelope.producerServiceId ?? envelope.provenance.sourceId,
+    observedAt: envelope.occurredAt,
+    payload: envelope.payload,
+    relationships: (envelope.tags ?? [])
+      .filter((tag) => tag.startsWith("rel:"))
+      .map((tag) => {
+        const [, targetId, ...relationParts] = tag.split(":");
+        return { targetId, relation: relationParts.join(":") || "RELATED" };
+      }),
+    provenance: {
+      sourceId: envelope.provenance.sourceId,
+      observedAt: envelope.provenance.observedAt,
+      ingestedAt: envelope.provenance.receivedAt,
+      confidence: envelope.provenance.quality ?? "UNKNOWN",
+      classification: envelope.classification === "CONTROLLED" ? "CONTROLLED" : envelope.classification === "RESTRICTED" ? "RESTRICTED" : "UNCLASSIFIED",
+      lineage: [...(envelope.provenance.lineageIds ?? [envelope.provenance.sourceId])],
+    },
+    version: envelope.version,
   };
 }
 

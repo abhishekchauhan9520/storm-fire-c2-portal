@@ -1,5 +1,5 @@
 import { stormFireInformationFabric } from "./informationFabric";
-import { stormFireInformationRelationships } from "./informationRelationships";
+import { stormFireInformationRelationships } from "./informationRelationshipEngine";
 import { ParallelAlertRouter } from "./parallelAlertRouter";
 import { stormFireServiceFabric } from "../service-fabric/serviceFabric";
 
@@ -24,7 +24,7 @@ export class StormFireOperationalRuntime {
     return {
       informationId: published.id,
       informationType: published.type,
-      recipients: dispatched.recipients.map(recipient => recipient.participantId),
+      recipients: dispatched.recipients.map((recipient) => recipient.participantId),
     };
   }
 }

@@ -1,4 +1,4 @@
-import type { StormFireServiceManifest } from "./serviceRegistry";
+import type { StormFireServiceManifest } from "./serviceManifestAdapter";
 import type { AlertPriority } from "./parallelAlertFabric";
 import { stormFirePolicyEngine, type ServiceAction, type ServiceIdentity } from "./servicePolicy";
 

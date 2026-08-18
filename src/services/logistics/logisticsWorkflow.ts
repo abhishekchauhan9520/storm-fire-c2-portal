@@ -1,47 +1,67 @@
 import { stormFireInformationFabric } from "../../domain/informationFabric";
 import { AlertDispatchResult, AlertDispatchService } from "../../domain/alertDispatch";
-import { InformationPolicyRegistry } from "../../domain/informationPolicy";
-import { InformationRelationshipRegistry } from "../../domain/informationRelationships";
+import { InformationRelationshipEngine, stormFireInformationRelationships } from "../../domain/informationRelationshipEngine";
+import { stormFireEventSpine } from "../../platform/event-spine/eventSpine";
+import type { Event } from "../../contracts/stormFireContracts";
 import { LogisticsRequest, LogisticsService } from "./logisticsService";
 
-export interface LogisticsWorkflowResult {
-  request: LogisticsRequest;
-  requestEventId: string;
-  alert?: AlertDispatchResult;
-}
+export interface LogisticsWorkflowResult { request: LogisticsRequest; requestEventId: string; requestPublished: boolean; alert?: AlertDispatchResult; }
 
-/** End-to-end Logistics flow: request -> canonical information -> policy/relationship evaluation -> parallel alert fan-out. */
+/** End-to-end Logistics flow through canonical persistence, Event Spine, information, policy and relationship layers. */
 export class LogisticsWorkflow {
-  constructor(private readonly logistics: LogisticsService, private readonly policies: InformationPolicyRegistry, private readonly relationships: InformationRelationshipRegistry) {}
+  constructor(
+    private readonly logistics: LogisticsService,
+    private readonly relationships: InformationRelationshipEngine = stormFireInformationRelationships,
+  ) {}
 
-  createAndDistributeRequest(input: Omit<LogisticsRequest, "status" | "createdAt" | "updatedAt">, recipients: string[], policyIds: string[], scopeIds: string[] = []): LogisticsWorkflowResult {
+  async createAndDistributeRequest(
+    input: Omit<LogisticsRequest, "status" | "createdAt" | "updatedAt">,
+    recipients: string[],
+    policyIds: string[],
+    scopeIds: string[] = [],
+  ): Promise<LogisticsWorkflowResult> {
     const request = this.logistics.createRequest(input);
     const now = new Date().toISOString();
-    const requestEvent = {
-      id: `logistics.request:${randomId()}`,
-      kind: "EVENT" as const,
-      type: "logistics.request",
-      version: 1,
-      occurredAt: now,
-      producerServiceId: "logistics",
-      producerParticipantId: request.requesterParticipantId,
-      correlationId: request.id,
-      provenance: { sourceId: "logistics", observedAt: now, receivedAt: now },
+    const requestEvent: Event<LogisticsRequest> = {
+      metadata: {
+        eventId: `logistics.request:${randomId()}`,
+        eventType: "LogisticsRequestCreated",
+        schemaVersion: 1,
+        source: "logistics",
+        producer: request.requesterParticipantId,
+        timestamp: now,
+        correlationId: request.id,
+        classification: "CONTROLLED",
+        geographicScopeIds: scopeIds,
+        provenance: { sourceId: "logistics", observedAt: now, receivedAt: now },
+      },
       payload: request,
     };
-    stormFireInformationFabric.publish(requestEvent);
+
+    const requestPublished = await stormFireEventSpine.publish(requestEvent);
 
     let alert: AlertDispatchResult | undefined;
     if (request.priority === "HIGH" || request.priority === "CRITICAL") {
-      const alertEvent = {
-        ...requestEvent,
+      const alertEnvelope = {
         id: `logistics.alert:${randomId()}`,
+        kind: "EVENT" as const,
         type: "logistics.alert",
+        schemaVersion: 1,
+        version: 1,
+        occurredAt: now,
+        producerServiceId: "logistics",
+        producerParticipantId: request.requesterParticipantId,
+        correlationId: request.id,
+        classification: "CONTROLLED" as const,
+        geographicScopeIds: scopeIds,
+        provenance: { sourceId: "logistics", observedAt: now, receivedAt: now },
         payload: { requestId: request.id, priority: request.priority, resourceId: request.resourceId, quantity: request.quantity },
       };
-      alert = new AlertDispatchService(stormFireInformationFabric, this.policies, this.relationships).dispatch(alertEvent, recipients, policyIds, scopeIds);
+      alert = new AlertDispatchService(stormFireInformationFabric, this.relationships)
+        .dispatch(alertEnvelope, recipients, policyIds, scopeIds);
     }
-    return { request, requestEventId: requestEvent.id, ...(alert ? { alert } : {}) };
+
+    return { request, requestEventId: requestEvent.metadata.eventId, requestPublished, ...(alert ? { alert } : {}) };
   }
 }
 
