@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Event } from "../../contracts/stormFireContracts";
 import { runDynamicCopScenario } from "../../domain/dynamicCopScenario";
+import { stormFireAuthorization } from "../../domain/authorizationPolicy";
 import { stormFireInformationRelationships } from "../../domain/informationRelationshipEngine";
 import { stormFireParticipantEventStream } from "./participantEventStream";
 import { dispatchParticipantEvent } from "./participantEventDispatch";
@@ -20,6 +21,38 @@ test("dispatches one canonical Logistics event to source and relationship-connec
     toParticipantId: recipient,
     direction: "VERTICAL",
     informationTypes: ["LogisticsRequest"],
+    enabled: true,
+  });
+
+  stormFireAuthorization.register({
+    id: "realtime-company-logistics-request",
+    version: 1,
+    effect: "ALLOW",
+    participantIds: [source],
+    serviceIds: ["logistics"],
+    organizationIds: ["company-alpha"],
+    roleIds: ["company-commander"],
+    relationshipIds: ["brigade-logistics"],
+    informationTypes: ["LogisticsRequest"],
+    geographicScopeIds: ["sector-20km"],
+    classifications: ["CONTROLLED"],
+    priority: 200,
+    enabled: true,
+  });
+
+  stormFireAuthorization.register({
+    id: "realtime-brigade-logistics-request",
+    version: 1,
+    effect: "ALLOW",
+    participantIds: [recipient],
+    serviceIds: ["logistics"],
+    organizationIds: ["brigade-alpha"],
+    roleIds: ["brigade-commander"],
+    relationshipIds: ["brigade-logistics"],
+    informationTypes: ["LogisticsRequest"],
+    geographicScopeIds: ["sector-20km"],
+    classifications: ["CONTROLLED"],
+    priority: 200,
     enabled: true,
   });
 
@@ -59,6 +92,7 @@ test("dispatches one canonical Logistics event to source and relationship-connec
     assert.equal(received.get(recipient)?.length, 1);
   } finally {
     for (const unsubscribe of unsubscribers) unsubscribe();
+    stormFireAuthorization.clear();
     stormFireInformationRelationships.remove(relationshipId);
   }
 });
