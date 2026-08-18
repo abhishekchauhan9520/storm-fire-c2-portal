@@ -71,3 +71,19 @@ export async function fetchPlatformProjection(
     alerts: alertsBody,
   };
 }
+
+export function subscribePlatformProjectionInvalidation(
+  participantId: string,
+  onInvalidate: () => void,
+  onError?: (error: Event) => void,
+): () => void {
+  if (!participantId.trim()) throw new Error("Participant ID is required.");
+  const source = new EventSource(`/api/events/stream?participantId=${encodeURIComponent(participantId)}`);
+  source.addEventListener("cop.invalidate", onInvalidate);
+  if (onError) source.addEventListener("error", onError);
+  return () => {
+    source.removeEventListener("cop.invalidate", onInvalidate);
+    if (onError) source.removeEventListener("error", onError);
+    source.close();
+  };
+}
