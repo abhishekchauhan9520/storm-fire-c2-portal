@@ -1,4 +1,4 @@
-import type { StormFireServiceManifest } from "./serviceRegistry";
+import type { StormFireServiceManifest } from "./serviceManifestAdapter";
 import type { CanonicalInformationRecord } from "./informationFabricBridge";
 import type { StormFireEvent } from "./serviceEventBus";
 import type { AlertPriority, ParallelAlertResult } from "./parallelAlertFabric";
