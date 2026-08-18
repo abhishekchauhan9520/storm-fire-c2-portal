@@ -14,20 +14,25 @@ export type StormFireSubscription = InformationSubscription & {
   handler: (message: StormFireInformationEnvelope) => void;
 };
 
-/**
- * Canonical in-process Information Fabric adapter.
- * Durable transport/storage can replace this implementation without changing
- * the domain contract or its consumers.
- */
+export interface InformationFabricPersistence {
+  load(): Promise<StormFireInformationEnvelope[]>;
+  append(message: StormFireInformationEnvelope): Promise<void>;
+}
+
+/** Canonical Information Fabric with an injectable durable history boundary. */
 export class InformationFabric {
   private history: StormFireInformationEnvelope[] = [];
   private subscriptions = new Map<string, StormFireSubscription>();
   private readonly idempotency = new EventIdempotencyStore();
 
+  constructor(private readonly persistence?: InformationFabricPersistence) {}
+
   publish<T>(message: StormFireInformationEnvelope<T>): StormFireInformationEnvelope<T> {
     this.validate(message);
     if (message.kind === "EVENT" && !this.idempotency.markProcessed(message)) return this.clone(message);
-    this.history.push(this.clone(message));
+    const canonical = this.clone(message);
+    this.history.push(canonical);
+    if (this.persistence) void this.persistence.append(canonical);
     for (const subscription of this.subscriptions.values()) {
       if (!subscription.enabled) continue;
       if (subscription.informationTypes.includes(message.type) || subscription.informationTypes.includes("*")) {
@@ -35,6 +40,16 @@ export class InformationFabric {
       }
     }
     return this.clone(message);
+  }
+
+  async hydrate(): Promise<void> {
+    if (!this.persistence) return;
+    const persisted = await this.persistence.load();
+    this.history = persisted.map((message) => this.clone(message));
+    this.idempotency.clear();
+    for (const message of this.history) {
+      if (message.kind === "EVENT") this.idempotency.markProcessed(message);
+    }
   }
 
   subscribe(subscription: StormFireSubscription): void {
