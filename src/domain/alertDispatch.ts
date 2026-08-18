@@ -20,14 +20,19 @@ export class AlertDispatchService {
     const rejected: string[] = [];
 
     for (const participantId of [...new Set(recipients)]) {
+      const policies = policyIds
+        .map((id) => stormFireAuthorization.get(id))
+        .filter((policy): policy is NonNullable<ReturnType<typeof stormFireAuthorization.get>> => Boolean(policy));
+      const relationshipIds = policies.flatMap((policy) => policy.relationshipIds ?? []);
       const authorization = stormFireAuthorization.decide({
         requestId: `alert:${alert.id}:${participantId}`,
         participantId,
         informationType: alert.type,
         geographicScopeIds: scopeIds,
         classification: alert.classification,
+        relationshipIds,
       });
-      const requestedPoliciesExist = policyIds.length === 0 || policyIds.some((id) => Boolean(stormFireAuthorization.get(id)));
+      const requestedPoliciesExist = policyIds.length === 0 || policies.length > 0;
       const relationshipAllowed = Boolean(
         !alert.producerParticipantId ||
         this.relationships.canShare(alert.producerParticipantId, participantId, alert.type),
