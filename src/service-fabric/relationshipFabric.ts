@@ -18,7 +18,7 @@ function project(relationship: StormFireInformationRelationship): StormFireInfor
     sourceParticipantId: relationship.fromParticipantId,
     targetParticipantId: relationship.toParticipantId,
     axis: relationship.direction,
-    informationTypes: [...relationship.informationTypes],
+    informationTypes: [...relationship.allowedInformationTypes],
     enabled: relationship.enabled,
   };
 }
@@ -42,7 +42,7 @@ class RelationshipFabric {
         fromParticipantId: input.sourceParticipantId,
         toParticipantId: input.targetParticipantId,
         direction: input.axis,
-        informationTypes: [...input.informationTypes],
+        allowedInformationTypes: [...input.informationTypes],
         enabled: input.enabled,
       });
     }
