@@ -1,5 +1,6 @@
-import { stormFireServices, registerStormFireService, type StormFireServiceManifest } from "./serviceRegistry";
+import { stormFireServiceManifests, registerCanonicalService, type StormFireServiceManifest } from "./serviceManifestAdapter";
 import { stormFireServiceLifecycle, type ServiceLifecycleRecord } from "./serviceLifecycle";
+import { stormFireServiceFabric } from "./serviceFabric";
 
 export interface ServiceInventoryEntry extends ServiceLifecycleRecord {
   contractValid: boolean;
@@ -7,17 +8,16 @@ export interface ServiceInventoryEntry extends ServiceLifecycleRecord {
 }
 
 /**
- * Runtime inventory for the compatibility service manifest layer.
- * Registration itself is delegated to the canonical Service Fabric; lifecycle
- * records are operational metadata and are not a second service-state store.
+ * Runtime inventory for service manifest/lifecycle tooling.
+ * Canonical runtime state remains in Service Fabric; lifecycle records are metadata.
  */
 export class StormFireServiceRegistryRuntime {
-  bootstrap(services: StormFireServiceManifest[] = stormFireServices): ServiceInventoryEntry[] {
+  bootstrap(services: StormFireServiceManifest[] = stormFireServiceManifests): ServiceInventoryEntry[] {
     return services.map((service) => {
       const errors: string[] = [];
       let registered: StormFireServiceManifest = service;
       try {
-        registered = registerStormFireService(service);
+        registered = registerCanonicalService(service, stormFireServiceFabric);
       } catch (error) {
         errors.push(error instanceof Error ? error.message : String(error));
       }
