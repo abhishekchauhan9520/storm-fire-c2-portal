@@ -1,4 +1,4 @@
-import { stormFireServiceManifests, registerCanonicalService, fromCanonicalService, type StormFireServiceManifest } from "./serviceManifestAdapter";
+import { registerCanonicalService, fromCanonicalService, type StormFireServiceManifest } from "./serviceManifestAdapter";
 import { stormFireServiceLifecycle, type ServiceLifecycleRecord } from "./serviceLifecycle";
 import { stormFireServiceFabric } from "./serviceFabric";
 
@@ -14,8 +14,7 @@ export interface ServiceInventoryEntry extends ServiceLifecycleRecord {
 export class StormFireServiceRegistryRuntime {
   bootstrap(services?: StormFireServiceManifest[]): ServiceInventoryEntry[] {
     const source = services ?? stormFireServiceFabric.list().map(fromCanonicalService);
-    const fallback = source.length > 0 ? source : stormFireServiceManifests;
-    return fallback.map((service) => {
+    return source.map((service) => {
       const errors: string[] = [];
       let registered: StormFireServiceManifest = service;
       try {
