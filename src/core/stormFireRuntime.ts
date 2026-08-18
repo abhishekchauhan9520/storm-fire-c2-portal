@@ -1,4 +1,4 @@
-import type { Alert, Event, InformationObject, Participant, Service, Workspace } from "../contracts/stormFireContracts";
+import type { Event, InformationObject, Participant, Service, Workspace } from "../contracts/stormFireContracts";
 import { stormFireOrganizationGraph } from "../domain/organizationGraph";
 import { stormFireParticipantContexts } from "../domain/participantContext";
 import { InformationFabric, stormFireInformationFabric } from "../domain/informationFabric";
@@ -23,7 +23,6 @@ export function createStormFireRuntime(
   informationFabric: InformationFabric = new InformationFabric(),
 ) {
   const events: Event[] = [];
-  const alerts = new Map<string, Alert>();
   const relationships = [...(initial.relationships ?? [])];
   const workspaces = [...(initial.workspaces ?? [])];
   let sequence = 0;
@@ -52,12 +51,34 @@ export function createStormFireRuntime(
     payload: event.payload as Record<string, unknown>,
   });
 
+  const projectAlert = (message: InformationObject): OperationalAlert | undefined => {
+    if (message.type !== "operational.alert" || typeof message.payload !== "object" || message.payload === null) return undefined;
+    const payload = message.payload as OperationalAlert;
+    if (!payload.id || !payload.objectId || !payload.severity || !payload.state || !payload.createdAt || !payload.updatedAt || !Array.isArray(payload.recipients)) return undefined;
+    return {
+      id: payload.id,
+      objectId: payload.objectId,
+      severity: payload.severity,
+      state: payload.state,
+      createdAt: payload.createdAt,
+      updatedAt: payload.updatedAt,
+      recipients: [...payload.recipients],
+    };
+  };
+
   const state = {
     get participants() { return stormFireParticipants.list(); },
     relationships,
     get objects() { return informationFabric.historyFor().filter((item) => item.kind === "OBJECT").map(projectObject); },
     get events() { return events.map(projectEvent); },
-    get alerts() { return [...alerts.values()].map((alert): OperationalAlert => ({ id: alert.id, objectId: alert.objectId ?? "", severity: alert.severity, state: alert.state, createdAt: alert.createdAt, updatedAt: alert.updatedAt, recipients: [...alert.recipientParticipantIds] })); },
+    get alerts() {
+      const latestById = new Map<string, OperationalAlert>();
+      for (const message of informationFabric.historyFor("operational.alert")) {
+        const alert = projectAlert(message);
+        if (alert) latestById.set(alert.id, alert);
+      }
+      return [...latestById.values()];
+    },
     get services() { return stormFireServiceFabric.list(); },
     workspaces,
   } as StormFireRuntimeState;
@@ -75,6 +96,22 @@ export function createStormFireRuntime(
       geographicScopeIds: [],
       provenance: { sourceId: object.sourceParticipantId, observedAt: object.timestamp, receivedAt: object.timestamp, confidence: object.confidence },
       payload: object.attributes,
+    });
+  }
+
+  for (const alert of initial.alerts ?? []) {
+    informationFabric.publish<OperationalAlert>({
+      id: `alert:${alert.id}`,
+      kind: "OBJECT",
+      type: "operational.alert",
+      schemaVersion: 1,
+      version: 1,
+      occurredAt: alert.updatedAt,
+      producerParticipantId: "system",
+      classification: "CONTROLLED",
+      geographicScopeIds: [],
+      provenance: { sourceId: "system", observedAt: alert.createdAt, receivedAt: alert.updatedAt },
+      payload: { ...alert, recipients: [...alert.recipients] },
     });
   }
 
@@ -138,21 +175,23 @@ export function createStormFireRuntime(
       return projectEvent(event);
     },
     publishAlert(alert: OperationalAlert) {
-      const canonical: Alert = {
-        id: alert.id,
-        objectId: alert.objectId,
-        type: "operational",
-        severity: alert.severity,
-        state: alert.state,
-        createdAt: alert.createdAt,
-        updatedAt: alert.updatedAt,
-        sourceParticipantId: "system",
-        recipientParticipantIds: [...alert.recipients],
-        geographicScopeIds: [],
+      const canonical: InformationObject<OperationalAlert> = {
+        id: `alert:${alert.id}`,
+        kind: "OBJECT",
+        type: "operational.alert",
+        schemaVersion: 1,
+        version: 1,
+        occurredAt: alert.updatedAt,
+        producerParticipantId: "system",
         classification: "CONTROLLED",
+        geographicScopeIds: [],
         provenance: { sourceId: "system", observedAt: alert.createdAt, receivedAt: alert.updatedAt },
+        payload: { ...alert, recipients: [...alert.recipients] },
       };
-      alerts.set(alert.id, canonical);
+
+      const current = informationFabric.historyFor("operational.alert").find((item) => item.id === canonical.id);
+      const next = current ? { ...canonical, version: current.version + 1 } : canonical;
+      informationFabric.publish(next);
       return alert;
     },
     resolveWorkspace(id: string) { return workspaces.find((workspace) => workspace.id === id); },
