@@ -28,7 +28,7 @@ const runtime = createStormFireRuntime({}, stormFireInformationFabric);
 const isProduction = process.env.NODE_ENV === "production";
 const developmentParticipantId = process.env.STORM_FIRE_DEV_PARTICIPANT_ID || "operator-command";
 app.use(express.json({ limit: "1mb" }));
-function authenticatedParticipantId(req: Request): string | null { if (isProduction) return null; return req.header("x-storm-fire-participant-id") || developmentParticipantId || null; }
+function authenticatedParticipantId(req: Request): string | null { if (isProduction) return null; const claimed = req.header("x-storm-fire-participant-id") || (typeof req.query.participantId === "string" ? req.query.participantId : undefined); return claimed || developmentParticipantId || null; }
 function requireParticipant(req: Request, res: express.Response, next?: express.NextFunction): string | null { const participantId = authenticatedParticipantId(req); if (!participantId) { res.status(401).json({ error: "Authenticated participant identity is required for operational data access." }); return null; } try { resolveParticipantOperationalContext(participantId); } catch (error) { res.status(403).json({ error: error instanceof Error ? error.message : "Participant context is unavailable." }); return null; } res.locals.stormFireParticipantId = participantId; if (next) next(); return participantId; }
 function requireParticipantMiddleware(req: Request, res: express.Response, next: express.NextFunction): void { requireParticipant(req, res, next); }
 for (const eventType of ["LogisticsResourceRegistered", "LogisticsRequestCreated", "LogisticsRequestStatusChanged", "LogisticsRequestStatusReaffirmed"]) stormFireEventSpine.subscribe(eventType, (event) => { dispatchParticipantEvent(event); });
