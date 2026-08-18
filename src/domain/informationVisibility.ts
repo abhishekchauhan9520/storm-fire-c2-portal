@@ -17,19 +17,21 @@ export interface StormFireVisibilityDecision { allowed: boolean; reasons: string
 
 /**
  * COP visibility combines relationship reachability, geometric scope when
- * coordinates are available, and the canonical server-side authorization decision.
+ * coordinates are available, and the canonical server-side authorization
+ * decision. Multiple eligible service paths are evaluated independently; the
+ * first service must not become an accidental authority boundary.
  */
 export function evaluateStormFireInformationVisibility(
   context: StormFireResolvedOperationalContext,
   information: StormFireInformationVisibilityContext & { producerParticipantId?: string },
 ): StormFireVisibilityDecision {
   const reasons: string[] = [];
-  const service = context.services.find((candidate) =>
+  const services = context.services.filter((candidate) =>
     candidate.informationTypesConsumed.includes(information.informationType) ||
     candidate.informationTypesProduced.includes(information.informationType),
   );
 
-  if (!service) return { allowed: false, reasons: ["Participant has no eligible canonical service for this information type."] };
+  if (services.length === 0) return { allowed: false, reasons: ["Participant has no eligible canonical service for this information type."] };
 
   const sameOrganization = context.organizationIds.includes(information.organizationId);
   const relationshipAllowed = Boolean(information.relationshipId && context.relationshipIds.includes(information.relationshipId));
@@ -52,24 +54,34 @@ export function evaluateStormFireInformationVisibility(
     return { allowed: false, reasons: ["Information is outside the participant geographic scope."] };
   }
 
-  const policy = stormFireAuthorization.decide({
-    requestId: `cop:${context.participantId}:${information.id ?? information.informationType}:${service.id}`,
-    participantId: context.participantId,
-    informationType: information.informationType,
-    serviceId: service.id,
-    organizationIds: [information.organizationId],
-    roleIds: context.roleIds,
-    relationshipIds: information.relationshipId ? [information.relationshipId] : context.relationshipIds,
-    geographicScopeIds: information.geographicScopeId ? [information.geographicScopeId] : context.geographicScopeIds,
-    classification: information.classification,
-  });
+  if (information.classification && context.informationClassification && information.classification !== context.informationClassification) {
+    return { allowed: false, reasons: ["Information classification does not match participant context."] };
+  }
 
-  if (!policy.allowed) return { allowed: false, reasons: [`POLICY_${policy.reason}`, policy.accessDecision.reason] };
-  if (information.classification && context.informationClassification && information.classification !== context.informationClassification) return { allowed: false, reasons: ["Information classification does not match participant context."] };
+  const decisions = services.map((service) => ({
+    service,
+    policy: stormFireAuthorization.decide({
+      requestId: `cop:${context.participantId}:${information.id ?? information.informationType}:${service.id}`,
+      participantId: context.participantId,
+      informationType: information.informationType,
+      serviceId: service.id,
+      organizationIds: [information.organizationId],
+      roleIds: context.roleIds,
+      relationshipIds: information.relationshipId ? [information.relationshipId] : context.relationshipIds,
+      geographicScopeIds: information.geographicScopeId ? [information.geographicScopeId] : context.geographicScopeIds,
+      classification: information.classification,
+    }),
+  }));
+
+  const allowed = decisions.find(({ policy }) => policy.allowed);
+  if (!allowed) {
+    const policyReasons = decisions.map(({ service, policy }) => `${service.id}:${policy.reason}`).join(" | ");
+    return { allowed: false, reasons: ["POLICY_NO_ELIGIBLE_SERVICE_PATH", policyReasons] };
+  }
 
   reasons.push(sameOrganization ? `Visible within ${information.organizationId} organizational context.` : `Visible through ${information.relationshipId} information relationship.`);
   if (information.geographicScopeId) reasons.push(`Geographic scope: ${information.geographicScopeId}.`);
-  reasons.push(`Eligible through ${service.id} service.`);
-  reasons.push(`Authorized by ${policy.accessDecision.matchedPolicyIds.join(", ") || "policy"}.`);
+  reasons.push(`Eligible through ${allowed.service.id} service path.`);
+  reasons.push(`Authorized by ${allowed.policy.accessDecision.matchedPolicyIds.join(", ") || "policy"}.`);
   return { allowed: true, reasons };
 }
