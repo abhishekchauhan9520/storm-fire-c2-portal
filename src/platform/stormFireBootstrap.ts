@@ -59,7 +59,7 @@ export function bootstrapStormFireDevelopmentScenario(): void {
 
   const addRelationship = (id: string, from: string, to: string, direction: "VERTICAL" | "HORIZONTAL" | "DIAGONAL", allowedInformationTypes: string[]) => {
     if (stormFireDevelopmentInformationRelationships.list().some((relationship) => relationship.id === id)) return;
-    stormFireDevelopmentInformationRelationships.register({ id, fromParticipantId: from, toParticipantId: to, direction, informationTypes: allowedInformationTypes, enabled: true });
+    stormFireDevelopmentInformationRelationships.register({ id, fromParticipantId: from, toParticipantId: to, direction, allowedInformationTypes, enabled: true });
   };
 
   addRelationship("info-command-intel", "operator-command", "operator-intel", "HORIZONTAL", ["Observation", "Track", "Assessment", "Alert", "Context"]);
