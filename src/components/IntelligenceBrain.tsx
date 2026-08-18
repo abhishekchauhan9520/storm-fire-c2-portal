@@ -4,8 +4,6 @@ import type { TacticalLog } from "../types";
 
 interface IntelligenceBrainProps {
   onAddLog: (log: Omit<TacticalLog, "id" | "timestamp">) => void;
-  /** Transitional compatibility prop. Canonical information ingestion no longer uses it. */
-  onNominateTarget?: (name: string, type: string, coordinates: string) => void;
 }
 
 interface DiscoveryResult {
