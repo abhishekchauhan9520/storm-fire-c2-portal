@@ -11,19 +11,17 @@ test("dispatches one canonical Logistics event to source and relationship-connec
 
   const source = "company-cdr";
   const recipient = "brigade-cdr";
-  const relationshipId = "brigade-logistics";
+  const relationshipId = "realtime-brigade-logistics";
 
-  const existing = stormFireInformationRelationships.get(relationshipId);
-  if (!existing) {
-    stormFireInformationRelationships.register({
-      id: relationshipId,
-      fromParticipantId: source,
-      toParticipantId: recipient,
-      direction: "VERTICAL",
-      informationTypes: ["LogisticsRequest"],
-      enabled: true,
-    });
-  }
+  stormFireInformationRelationships.remove(relationshipId);
+  stormFireInformationRelationships.register({
+    id: relationshipId,
+    fromParticipantId: source,
+    toParticipantId: recipient,
+    direction: "VERTICAL",
+    informationTypes: ["LogisticsRequest"],
+    enabled: true,
+  });
 
   const received = new Map<string, string[]>();
   const unsubscribers = [source, recipient].map((participantId) =>
@@ -61,5 +59,6 @@ test("dispatches one canonical Logistics event to source and relationship-connec
     assert.equal(received.get(recipient)?.length, 1);
   } finally {
     for (const unsubscribe of unsubscribers) unsubscribe();
+    stormFireInformationRelationships.remove(relationshipId);
   }
 });
